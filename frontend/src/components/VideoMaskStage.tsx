@@ -203,7 +203,7 @@ export default function VideoMaskStage({
               const frame = layer.frames[currentFrame] || layer.frames[0];
               if (!frame) return null;
               const isSelected = layer.id === selectedLayerId;
-              if (frame.confidence <= 0.1 && !isSelected) return null;
+              if (frame.confidence <= 0.1) return null;
               const cx = frame.x + frame.width / 2;
               const cy = frame.y + frame.height / 2;
 

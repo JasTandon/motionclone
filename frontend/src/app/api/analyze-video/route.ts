@@ -110,10 +110,10 @@ Examine all ${imageBlocks.length} chronological video frames (scaled to 640x400 
 
 Perform a high-precision, frame-by-frame micro-choreography breakdown across 5 sequential phases:
 - Frame 1 & Frame 2: Wide bright-blue pill button with white lightning bolt and "Bentomotion" text on a light off-white background, compressing horizontally with motion blur.
-- Frame 3: Blue pill morphs into a tall pitch-black squircle with a translucent gray outer expansion halo while the inner neon-green Face ID face & 4 L-shaped rounded corner brackets unblur from soft glow to crisp lines.
-- Frame 4 & Frame 5: The inner face (eyes, J-nose, smile) dims to ~28% opacity while the 4 outer L-shaped corner brackets dynamically grow their straight arms to close the 4 side gaps and simultaneously round their corners toward an oval!
+- Frame 3: Blue pill morphs into a tall pitch-black squircle with a translucent gray outer expansion halo while the inner neon-green Face ID face & 4 straight-legged L-shaped rounded corner brackets unblur from soft glow to crisp lines.
+- Frame 4 & Frame 5: The inner face (wide-set eyes at x=43 and x=77, J-nose, well-spaced smile) dims to ~28% opacity while the 4 outer L-shaped corner brackets dynamically grow their straight arms to close the 4 side gaps and simultaneously round their corners into an oval!
 - Frame 6, Frame 7 & Frame 8: The connected green loop seamlessly transitions into 3 constant-thickness 3D wireframe oval rings tumbling in 3D space (first tilted +16deg compressed coil, then X-scissored at -28deg/+28deg over a soft green core, then vertical outer oval + inner longitudinal meridian ring + central vertical spine sweeping outward into alignment).
-- Frame 9 & Frame 10: The 3D globe locks into 1 crisp glowing vertical oval ring while a checkmark draws in slightly below center at small scale and springs upward/outward into the bold centered checkmark!
+- Frame 9 & Frame 10: The 3D globe locks into 1 crisp glowing vertical oval ring while a bold neon-green checkmark draws in slightly below center at small scale and springs upward/outward into the centered checkmark!
 
 Return ONLY valid JSON matching this schema (no markdown commentary):
 {
@@ -216,11 +216,11 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
     let phase2 =
       "Single #morph-card morphs its width, height, border-radius, and color into a tall pitch-black squircle (160x190px, border-radius 44px, #050507) with a transient 7px translucent gray outer halo, while the neon-green (#8fff5e) Face ID glyph unblurs from blur(6px) to blur(0px).";
     let phase3 =
-      "The 4 L-shaped Face ID brackets continuously grow their straight arms to close the 4 side gaps (gap: 0.17 -> 0.0) while rounding their corners (roundness: 0.0 -> 1.0) into an oval as the inner face dims to 25% and scales down.";
+      "The 4 straight-legged L-shaped Face ID brackets continuously grow their straight arms to close the 4 side gaps (gap: 0.18 -> 0.0) while rounding their corners (roundness: 0.0 -> 1.0) into a pure vertical oval as the inner face dims to 25% and scales down.";
     let phase4 =
       "Using continuous 60fps 3D mathematical projection (so stroke-width stays a constant 7px even at 90deg edge-on!), 3 wireframe rings spin through: (4A) tilted +16deg compressed coil; (4B) -28deg/+28deg X-scissored gyroscope over a glowing green core; (4C) vertical outer oval + inner longitudinal meridian ring + central vertical spine sweeping outward to lock at 360deg.";
     let phase5 =
-      "All 3 rings lock seamlessly at 0deg/360deg into the single glowing vertical oval (rx=30, ry=43), and the checkmark draws in slightly below center at scale(0.62) and springs upward/outward with overshoot bounce (scale 1.18 -> 1.0).";
+      "All 3 rings lock seamlessly into the pure vertical oval (<ellipse cx='60' cy='60' rx='31' ry='43'/>), and the bold checkmark draws in slightly below center at scale(0.62) and springs upward/outward with overshoot bounce (scale 1.18 -> 1.0).";
 
     const detectData = await detectResp.json();
     const rawDetectText: string =
@@ -311,7 +311,7 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
     );
 
     // ============================================================================
-    // STEP 2: Muse Spark 1.3 Unified 60fps Parametric 3D Bracket-to-Gyroscope Engine
+    // STEP 2: Muse Spark 1.3 Bug-Free Straight-Legged L-Bracket & Pure Oval Engine
     // ============================================================================
     const synthesisPrompt = `You are Meta Muse Spark 1.3 powering MotionClone.
 Look carefully at all ${imageBlocks.length} chronological frames from "${fileName}" AND the 5-Phase Breakdown below:
@@ -320,102 +320,71 @@ Look carefully at all ${imageBlocks.length} chronological frames from "${fileNam
 - Scene Background Color: ${sceneBackgroundHex}
 - PHASE 1 (Blue Pill & Squeeze): ${phase1}
 - PHASE 2 (Single Container Morph + Halo + Face ID Unblur): ${phase2}
-- PHASE 3 (Continuous Bracket-to-Oval Morph): ${phase3}
+- PHASE 3 (Straight-Legged L-Brackets Grow & Round into Oval): ${phase3}
 - PHASE 4 (60fps Mathematical 3D Wireframe Gyroscope & Globe Spin): ${phase4}
-- PHASE 5 (Vertical Oval Lock + Two-Stage Checkmark Spring Pop): ${phase5}
+- PHASE 5 (Pure Vertical Oval Lock + Two-Stage Checkmark Spring Pop): ${phase5}
 
-WHY PREVIOUS CSS ROTATIONS LOOKED STIFF (AND HOW YOU MUST FIX IT):
-1. Previously, the 4 Face ID brackets were static paths and a separate <rect> faded in, followed by a hard opacity cut to CSS-rotated divs (which flatten stroke-width to 0px at 90deg rotateY!).
-2. Instead, inside the single morphing \`#morph-card\`, use ONE unified \`<svg id="canvas-svg" width="120" height="120" viewBox="0 0 120 120" fill="none">\` driven by a continuous 60fps \`requestAnimationFrame\` loop that projects 3D points into SVG \`<path>\` elements with constant \`stroke-width="7"\`!
-3. Use this exact mathematical helper \`buildRingPath(gap, roundness, rxDeg, ryDeg, rzDeg)\` inside your \`<script>\` so the 4 L-shaped Face ID brackets literally grow their arms, round into an oval, and spin in 3D with constant 7px neon tube thickness:
+CRITICAL FIXES FOR THE 3 BUGS IN THE PREVIOUS RUN (FOLLOW 100% EXACTLY):
+
+1. FIX 1 — TRUE STRAIGHT-LEGGED APPLE FACE ID L-BRACKETS & NO CHORD GLITCH IN \`shapePoint(q, u, roundness)\`:
+   - Previously, \`shapePoint\` mutated \`u = 1 - u\` when \`q === 1\`, which caused a backward chord line across the bottom-right of the oval, and used a superellipse that bent the straight bracket arms into parentheses!
+   - You MUST use this exact, bug-free \`shapePoint(q, u, roundness)\` function (which NEVER mutates \`u\`, draws 100% straight horizontal/vertical bracket arms with a 12px circular 90-degree corner when \`roundness = 0\`, and morphs into a 100% pure clockwise ellipse \`(31 * Math.sin(theta), -43 * Math.cos(theta))\` when \`roundness = 1\`):
    \`\`\`js
    const lerp = (a, b, t) => a + (b - a) * t;
    const clamp01 = (t) => Math.max(0, Math.min(1, t));
    const easeInOut = (t) => 0.5 - 0.5 * Math.cos(Math.PI * clamp01(t));
 
-   // Returns a 2D point on the rounded-rectangle (W=34, H=36, R=12) merged with vertical oval (rx=30, ry=43)
    function shapePoint(q, u, roundness) {
      // q in 0..3 (0: top-right, 1: bottom-right, 2: bottom-left, 3: top-left), u in [0, 1]
-     const W = 34, H = 36, R = 12;
-     let x = 0, y = 0;
-     if (u < 0.34) {
-       const t = u / 0.34;
-       x = lerp(0, W - R, t); y = -H;
-     } else if (u <= 0.66) {
-       const a = lerp(-Math.PI / 2, 0, (u - 0.34) / 0.32);
-       x = (W - R) + R * Math.cos(a); y = -(H - R) + R * Math.sin(a);
+     // Local parameter v in [0, 1] for symmetric quadrant evaluation (NEVER mutate u!)
+     const v = (q % 2 === 1) ? (1 - u) : u;
+     const W = 35, H = 37, R = 13;
+     let bx = 0, by = 0;
+     if (v < 0.35) {
+       bx = lerp(0, W - R, v / 0.35);
+       by = -H; // 100% straight horizontal leg
+     } else if (v <= 0.65) {
+       const a = lerp(-Math.PI / 2, 0, (v - 0.35) / 0.30);
+       bx = (W - R) + R * Math.cos(a);
+       by = -(H - R) + R * Math.sin(a); // Exact 90-deg circular corner
      } else {
-       const t = (u - 0.66) / 0.34;
-       x = W; y = lerp(-(H - R), 0, t);
+       bx = W; // 100% straight vertical leg
+       by = lerp(-(H - R), 0, (v - 0.65) / 0.35);
      }
-     let rx = x, ry = y;
-     if (q === 1) { rx = x; ry = -y; u = 1 - u; }
-     // Better: use angle theta around the loop so all 4 quadrants are continuous and symmetric:
-     const theta = (q + u) * (Math.PI / 2) - Math.PI / 2;
-     const c = Math.cos(theta), s = Math.sin(theta);
-     const sx = Math.sign(c) || 1, sy = Math.sign(s) || 1;
-     const ac = Math.abs(c), as = Math.abs(s);
-     // Superellipse n=4.2 gives exact Apple Face ID L-bracket corners when roundness=0, and n=2.0 gives exact oval when roundness=1!
-     const exp = lerp(4.2, 2.0, roundness);
-     const radX = lerp(34, 30, roundness);
-     const radY = lerp(36, 43, roundness);
-     const px0 = sx * radX * Math.pow(ac, 2 / exp);
-     const py0 = sy * radY * Math.pow(as, 2 / exp);
-     return [px0, py0];
-   }
+     let rx = bx, ry = by;
+     if (q === 1) { rx = bx; ry = -by; }
+     else if (q === 2) { rx = -bx; ry = -by; }
+     else if (q === 3) { rx = -bx; ry = by; }
 
-   function project3D(x0, y0, rxDeg, ryDeg, rzDeg) {
-     const rx = rxDeg * Math.PI / 180, ry = ryDeg * Math.PI / 180, rz = rzDeg * Math.PI / 180;
-     // Rotate Y
-     let x1 = x0 * Math.cos(ry), y1 = y0, z1 = -x0 * Math.sin(ry);
-     // Rotate X
-     let x2 = x1, y2 = y1 * Math.cos(rx) - z1 * Math.sin(rx), z2 = y1 * Math.sin(rx) + z1 * Math.cos(rx);
-     // Rotate Z
-     let x3 = x2 * Math.cos(rz) - y2 * Math.sin(rz), y3 = x2 * Math.sin(rz) + y2 * Math.cos(rz), z3 = z2;
-     const fov = 260;
-     const scale = fov / (fov + z3);
-     return [60 + x3 * scale, 60 + y3 * scale];
-   }
-
-   function buildRingPath(gap, roundness, rxDeg, ryDeg, rzDeg) {
-     let d = "";
-     const steps = 18;
-     for (let q = 0; q < 4; q++) {
-       const uStart = gap, uEnd = 1 - gap;
-       for (let i = 0; i <= steps; i++) {
-         const u = lerp(uStart, uEnd, i / steps);
-         const [x0, y0] = shapePoint(q, u, roundness);
-         const [px, py] = project3D(x0, y0, rxDeg, ryDeg, rzDeg);
-         d += (i === 0 && (gap > 0.002 || q === 0) ? "M " : "L ") + px.toFixed(1) + " " + py.toFixed(1) + " ";
-       }
-     }
-     if (gap <= 0.002) d += "Z";
-     return d;
+     // Pure clockwise vertical oval starting at top-center (0, -43) for q=0, u=0:
+     const theta = (q + u) * (Math.PI / 2);
+     const ox = 31 * Math.sin(theta);
+     const oy = -43 * Math.cos(theta);
+     return [lerp(rx, ox, roundness), lerp(ry, oy, roundness)];
    }
    \`\`\`
-4. LOOK AT HOW FLUID THIS TIMELINE IS WHEN DRIVEN BY \`requestAnimationFrame\` (\`t\` in ms from \`0\` to \`4200\`):
-   - \`0ms - 450ms\` (Phase 1 - Blue Pill): \`#morph-card\` is the wide blue pill (\`232x66px\`, \`#007aff\`) with \`⚡ Bentomotion\`.
-   - \`450ms - 750ms\` (Phase 1B - Squeeze): \`#morph-card\` squeezes to \`172x60px\` with text motion blur.
-   - \`750ms - 1350ms\` (Phase 2 - Squircle Morph + Unblur): \`#morph-card\` morphs to \`160x190px\` black squircle (\`#050507\`) with transient 7px gray halo; \`#canvas-svg\` unblurs (\`blur(7px) -> blur(0px)\`) showing the 4 Face ID brackets (\`buildRingPath(0.18, 0, 0, 0, 0)\`) and inner \`#face-features\` (eyes, J-nose, smile) at \`opacity: 1\`.
-   - \`1350ms - 1850ms\` (Phase 3 - Brackets Extend & Round into Oval, \`p = easeInOut((t - 1350)/500)\`):
-     * \`gap = lerp(0.18, 0.0, p)\` (the 4 Face ID brackets smoothly grow their arms until they connect into a closed loop!)
-     * \`roundness = lerp(0.0, 0.85, p * p)\` (the corners smoothly round from the Face ID square toward the oval!)
-     * \`#face-features\` dims \`opacity = lerp(1.0, 0.15, p)\` and scales \`scale(lerp(1, 0.82, p))\`.
-   - \`1850ms - 2850ms\` (Phase 4 - Fluid 3D Multi-Ring Gyroscope & Meridian Globe Spin, \`p = (t - 1850)/1000\`, \`ep = easeInOut(p)\`):
-     * \`#face-features\` opacity is \`0\`; \`#gyro-core\` (soft green radial glow \`rgba(143,255,94,0.22)\`) has \`opacity = Math.sin(p * Math.PI) * 0.95\`.
-     * All 3 rings use \`gap = 0, roundness = 1.0\` and spin smoothly in 3D with constant \`7px\` neon stroke width:
-       - \`ring1\` (\`#ring-1\`): \`rz = Math.sin(p * Math.PI * 2) * 28 * (1 - ep)\`, \`ry = ep * 360\`, \`rx = Math.sin(p * Math.PI) * 18\`
-       - \`ring2\` (\`#ring-2\`): \`rz = -Math.sin(p * Math.PI * 2) * 28 * (1 - ep)\`, \`ry = ep * 540\`, \`rx = -Math.sin(p * Math.PI) * 22\`
-       - \`ring3\` (\`#ring-3\`): \`rz = Math.sin(p * Math.PI) * 16 * (1 - ep)\`, \`ry = ep * 180\`, \`rx = Math.sin(p * Math.PI * 2) * 32 * (1 - ep)\`
-     * Notice that at \`p = 0\`, \`ring1\`, \`ring2\`, and \`ring3\` all start at \`(0, 0, 0)\` (matching the end of Phase 3!), during \`p = 0.2..0.8\` they create the tilted squeeze, the \`-28deg/+28deg\` X-gyroscope cross, AND the vertical meridian globe (as \`ry\` passes through \`90deg\` and \`270deg\` with constant \`7px\` stroke width!), and at \`p = 1.0\` (\`ep = 1.0\`) they all land at \`rx = 0, rz = 0, ry = 360/540/180\` — which is the **exact single vertical oval**!
-   - \`2850ms - 4100ms\` (Phase 5 - Oval Lock & Two-Stage Checkmark Spring Pop):
-     * \`ring1\` holds \`buildRingPath(0, 1, 0, 0, 0)\` (while \`ring2\` and \`ring3\` hide so stroke isn't tripled), and \`#check-path\` (\`d="M 47 62 L 56 72 L 75 49"\`) draws in at \`translateY(5px) scale(0.62)\` over \`240ms\` and then springs upward with \`cubic-bezier(0.34, 1.85, 0.64, 1)\` to \`translateY(0px) scale(1.0)\`!
 
-5. STRICT COMPACT VIEWPORT SIZING (SO NOTHING EVER GOES OFF-FRAME):
-   - Keep \`html, body { margin: 0; padding: 14px 0 0 0; width: 100%; height: 100%; overflow: hidden; background: radial-gradient(circle at 50% 45%, #f8fafc 0%, #e4e8f0 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; }\`, \`.stage { height: 200px; display: flex; align-items: center; justify-content: center; }\`, and the 5 compact bottom buttons (\`▶ Auto-Loop\`, \`1. Blue Pill\`, \`2. Face ID\`, \`3. 3D Spin\`, \`4. Checkmark\`).
+2. FIX 2 — EXACT APPLE FACE ID INNER FACE PROPORTIONS (\`#face-features\`):
+   - Previously, the eyes (\`x=48..72, y=52..60\`), nose (\`y=52..71\`), and smile (\`y=74..81\`) were squished into the center so the nose touched the mouth!
+   - Use these exact, well-spaced Apple Face ID coordinates inside \`<g id="face-features" stroke="#8fff5e" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round" fill="none">\`:
+     * Left Eye (wide-set, upper-middle): \`<path d="M 43 44 L 43 53" />\`
+     * Right Eye (wide-set, upper-middle): \`<path d="M 77 44 L 77 53" />\`
+     * Center J-Nose (starts at eye level y=45, goes to y=60, hooks left to x=54.5, y=64.5): \`<path d="M 60 45 L 60 60 Q 60 64.5 54.5 64.5" />\`
+     * Smiling Mouth (clean 9px gap below the nose!): \`<path d="M 46 74 Q 60 85 74 74" />\`
+   - When scaling \`#face-features\` during Phase 3, use native SVG \`face.setAttribute('transform', \`translate(60, 60) scale(\${sc}) translate(-60, -60)\`)\` instead of CSS \`transform-box: fill-box\`!
+
+3. FIX 3 — GUARANTEED PURE VERTICAL OVAL & BOLD CHECKMARK IN PHASE 5 (\`t >= 2850ms\`):
+   - Include a dedicated \`<ellipse id="final-oval" cx="60" cy="60" rx="31" ry="43" stroke="#8fff5e" stroke-width="7.5" fill="none" opacity="0" style="filter:drop-shadow(0 0 7px rgba(143,255,94,.85))" />\` and \`<g id="check-group" opacity="0"><path id="check-path" d="M 46 61 L 55 72 L 75 48" stroke="#8fff5e" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none" style="filter:drop-shadow(0 0 7px rgba(143,255,94,.9))" /></g>\`.
+   - When \`t >= 2850\`:
+     * Hide \`r1\`, \`r2\`, \`r3\` (\`opacity="0"\`) and show \`finalOval.setAttribute('opacity', '1')\` so the final oval is a 100% pure native SVG \`<ellipse>\` with zero path seams!
+     * Set \`checkG.setAttribute('opacity', '1')\` and use native SVG \`checkG.setAttribute('transform', \`translate(60, \${60 + ty}) scale(\${sc}) translate(-60, -60)\`)\` + \`check.setAttribute('stroke-dasharray', '52')\` and \`check.setAttribute('stroke-dashoffset', (52 * (1 - drawP)).toFixed(1))\` so the checkmark ALWAYS draws in and springs upward cleanly!
+   - Also, when the user clicks ANY stage button (\`1. Blue Pill\`, \`2. Face ID\`, \`3. 3D Spin\`, \`4. Checkmark\`), instead of freezing on a single static millisecond, loop/play that stage's time window (e.g., clicking \`2. Face ID\` loops \`t = 900..1800\`, clicking \`3. 3D Spin\` loops \`t = 1850..2850\`, clicking \`4. Checkmark\` plays \`t = 2850..4100\` and holds at \`4100\`)!
+
+4. COMPACT VIEWPORT SIZING (NO CAPTION TEXT BELOW BUTTONS):
+   - Do NOT add any \`.caption\` div below \`.controls\`! Keep only \`.stage\` (\`height: 200px\`) and \`.controls\` (\`margin-top: 8px\`) centered on \`radial-gradient(circle at 50% 45%, #f8fafc 0%, #e4e8f0 100%)\`.
 
 Output TWO fenced code blocks in your response:
-1. First, a \`\`\`html ... \`\`\` block containing the COMPLETE, self-contained HTML5 document using the 60fps \`buildRingPath\` 3D engine.
+1. First, a \`\`\`html ... \`\`\` block containing the COMPLETE, self-contained HTML5 document.
 2. Second, a \`\`\`tsx ... \`\`\` block containing the complete React + Framer Motion + Tailwind CSS component code.`;
 
     const samConcept =
@@ -489,7 +458,7 @@ Output TWO fenced code blocks in your response:
         baseResult.codeExports.reactCode = tsxBlock;
       }
       pipelineLogs.push(
-        `Muse Spark 1.3 (${MUSE_MODEL_ID}): Synthesized 60fps parametric 3D superellipse bracket-to-gyroscope engine.`
+        `Muse Spark 1.3 (${MUSE_MODEL_ID}): Synthesized straight-legged L-bracket Face ID, 60fps 3D globe spin, and native SVG checkmark spring.`
       );
     }
 

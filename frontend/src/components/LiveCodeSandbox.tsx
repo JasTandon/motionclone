@@ -249,8 +249,8 @@ export default function LiveCodeSandbox({
       {activeTab === "preview" && (
         <div className="flex-1 flex flex-col justify-between p-4 space-y-3.5 overflow-y-auto">
           {/* Interactive Component Viewport */}
-          <div className="relative flex-1 min-h-[290px] rounded-xl bg-gradient-to-b from-[#050811] via-[#091122] to-[#050811] border border-slate-800/90 flex flex-col items-center justify-center p-4 overflow-hidden">
-            <div className="absolute top-3 left-3 z-20 flex items-center gap-2 text-[11px] font-mono text-slate-300 bg-slate-950/85 px-2.5 py-1 rounded-lg border border-slate-800">
+          <div className="relative flex-1 min-h-[340px] rounded-xl bg-gradient-to-b from-[#050811] via-[#091122] to-[#050811] border border-slate-800/90 flex flex-col items-center justify-center p-2 overflow-hidden">
+            <div className="absolute top-3 left-3 z-20 flex items-center gap-2 text-[11px] font-mono text-slate-300 bg-slate-950/85 px-2.5 py-1 rounded-lg border border-slate-800 pointer-events-none">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
               Live Cloned Component (Click UI to toggle!)
             </div>
@@ -269,7 +269,7 @@ export default function LiveCodeSandbox({
                 ref={iframeRef}
                 title="Muse Spark 1.3 Live Cloned UI"
                 srcDoc={customPreviewHtml}
-                className="w-full h-[270px] border-0 rounded-lg bg-transparent"
+                className="w-full h-[325px] border-0 rounded-lg bg-transparent"
                 sandbox="allow-scripts"
               />
             ) : (

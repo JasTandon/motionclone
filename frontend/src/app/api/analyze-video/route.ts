@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { buildPresetAnalysisLocal } from "@/lib/localPhysicsEngine";
 import { buildLayerFromBoxTrajectory } from "@/lib/videoFrameAnalyzer";
 import { TrackedLayer } from "@/types/motion";
+import fs from "fs";
+import path from "path";
 
 const META_BASE_URL = (process.env.META_BASE_URL || "https://api.meta.ai/v1").replace(/\/$/, "");
 const MUSE_MODEL_ID = process.env.MUSE_MODEL_ID || "muse-spark-1.3";
@@ -11,6 +13,14 @@ function extractCodeBlock(text: string, lang: string): string | null {
   const regex = new RegExp("```(?:" + lang + ")?\\s*([\\s\\S]*?)```", "i");
   const match = text.match(regex);
   return match ? match[1].trim() : null;
+}
+
+/**
+ * Ensures <svg> tags default to fill="none" so open stroke <path> elements
+ * never render default black diagonal triangles over icons.
+ */
+function sanitizeGeneratedHtml(html: string): string {
+  return html.replace(/<svg\b(?![^>]*\bfill=)/gi, '<svg fill="none"');
 }
 
 export async function POST(request: Request) {
@@ -49,11 +59,28 @@ export async function POST(request: Request) {
     keyframes = [];
   }
 
-  let durationMs = 1500;
+  // Save extracted keyframes to /tmp/motionclone_frames for inspection/debugging
+  try {
+    const tmpDir = "/tmp/motionclone_frames";
+    fs.mkdirSync(tmpDir, { recursive: true });
+    keyframes.forEach((dataUrl, i) => {
+      const base64Part = dataUrl.split(",")[1];
+      if (base64Part) {
+        fs.writeFileSync(
+          path.join(tmpDir, `frame_${String(i).padStart(2, "0")}.jpg`),
+          Buffer.from(base64Part, "base64")
+        );
+      }
+    });
+  } catch {
+    // non-blocking
+  }
+
+  let durationMs = 1800;
   if (clientTelemetryJson) {
     try {
       const parsedClient = JSON.parse(clientTelemetryJson);
-      durationMs = parsedClient.durationMs || 1500;
+      durationMs = parsedClient.durationMs || 1800;
       if (Array.isArray(parsedClient.layers) && parsedClient.layers.length > 0) {
         baseResult.layers = parsedClient.layers;
       }
@@ -76,28 +103,28 @@ export async function POST(request: Request) {
 
   try {
     // ============================================================================
-    // STEP 1: Muse Spark 1.3 Multi-Stage Storyboard (Part 1 -> Transition -> Part 2) & Kinematics
+    // STEP 1: Muse Spark 1.3 Chronological Multi-Stage Storyboard & Layer Detection
     // ============================================================================
     const detectionPrompt = `You are Meta Muse Spark 1.3 powering MotionClone.
-Examine all ${imageBlocks.length} chronological video frames (scaled to 640x400 pixels) from "${fileName}".
-Frames 1 to 5 show the FIRST PART of the animation. Frames 6 to ${imageBlocks.length} show the TRANSITION and SECOND PART of the animation.
-(Ignore any creator watermark/banner like "Bentomotion" if present; focus on the actual UI/icon animation sequence.)
+Examine all ${imageBlocks.length} chronological video frames (scaled to 640x400 pixels) from "${fileName}", from Frame 1 (start of video) to Frame ${imageBlocks.length} (end of video).
 
-Carefully break down BOTH the first part of the animation AND the second part of the animation so nothing is missed!
+Identify EVERY distinct chronological stage/part of the animation from start to finish so that BOTH the first part of the animation AND the second part (and any initial pill/button or intermediate morph) are completely captured!
 
 Return ONLY valid JSON matching this schema (no markdown commentary):
 {
-  "interactionTitle": "Specific title of the full animation (e.g. 'Apple Face ID Scan-to-Checkmark Animation')",
-  "interactionSummary": "Clear 1-2 sentence summary describing BOTH Part 1 (the initial graphic/scan/state) AND Part 2 (how it morphs and resolves)",
-  "part1Description": "Detailed visual & motion description of PART 1 (Frames 1-5): exact shapes, colors, SVG icon sub-parts (e.g. 4 corner brackets, eyes, nose bridge, curved smile mouth, or initial card/pill), and how they move/tilt/expand in the first half",
-  "transitionDescription": "Detailed description of how Part 1 morphs, twists, or collapses into Part 2",
-  "part2Description": "Detailed visual & motion description of PART 2 (Frames 6-10): exact shapes, colors, SVG icon sub-parts (e.g. glowing oval ring and animated checkmark), and how they settle with spring bounce",
+  "interactionTitle": "Specific title of the full animation sequence",
+  "interactionSummary": "Clear 1-2 sentence summary describing all parts of the animation from start to finish",
+  "stage1Description": "Exact visual & motion description of STAGE 1 (Beginning / First Part of the animation: exact shapes, colors, text, or SVG icon sub-parts like Face ID brackets/eyes/nose/mouth or initial pill/button, and how they animate)",
+  "stage2Description": "Exact visual & motion description of STAGE 2 (Middle / Scanning or Morphing part of the animation: how the shapes/icons tilt in 3D, expand, or morph)",
+  "stage3Description": "Exact visual & motion description of STAGE 3 (Final / Second Part of the animation: exact final shapes, glowing oval ring, checkmark draw-in, and spring bounce)",
   "layers": [
     {
-      "name": "Specific element name (include both Part 1 and Part 2 elements, e.g. 'Black Squircle Container', 'Part 1: Green Face ID Brackets & Face', 'Part 2: Glowing Oval & Checkmark')",
+      "name": "Specific element name (e.g. 'Stage 1: Face ID Brackets & Smiling Face', 'Stage 2: 3D Spinning Oval & Checkmark', 'Squircle Container')",
       "samPrompt": "2-4 word visual noun phrase for SAM 3.1 segmentation",
       "colorHex": "#06b6d4",
       "role": "container | media | control",
+      "startTimePct": 0.0,
+      "endTimePct": 1.0,
       "startBox": { "x": 195, "y": 55, "width": 250, "height": 275 },
       "endBox": { "x": 185, "y": 48, "width": 270, "height": 290 },
       "stiffness": 380,
@@ -135,12 +162,12 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
       );
     }
 
-    let part1Description =
-      "Initial icon/UI state with detailed sub-elements animating in with 3D perspective and spring expansion.";
-    let transitionDescription =
-      "Smooth spring morph and 3D rotation collapsing the first graphic into the second graphic.";
-    let part2Description =
-      "Final resolved icon/UI state expanding with spring overshoot and stroke draw-in.";
+    let stage1Description =
+      "Stage 1: Initial graphic/icon appears and performs its primary entrance and scanning/tilting motion.";
+    let stage2Description =
+      "Stage 2: Smooth 3D spring morph and transition from the first graphic into the second graphic.";
+    let stage3Description =
+      "Stage 3: Second graphic expands with spring overshoot and completes its stroke animation.";
 
     const detectData = await detectResp.json();
     const rawDetectText: string =
@@ -155,14 +182,14 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
         if (parsed.interactionSummary) {
           baseResult.interactionSummary = parsed.interactionSummary;
         }
-        if (parsed.part1Description) {
-          part1Description = parsed.part1Description;
+        if (parsed.stage1Description) {
+          stage1Description = parsed.stage1Description;
         }
-        if (parsed.transitionDescription) {
-          transitionDescription = parsed.transitionDescription;
+        if (parsed.stage2Description) {
+          stage2Description = parsed.stage2Description;
         }
-        if (parsed.part2Description) {
-          part2Description = parsed.part2Description;
+        if (parsed.stage3Description) {
+          stage3Description = parsed.stage3Description;
         }
         if (Array.isArray(parsed.layers) && parsed.layers.length > 0) {
           const palette = ["#06b6d4", "#10b981", "#a855f7", "#f59e0b"];
@@ -202,7 +229,11 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
                 Number(l.stiffness ?? 380),
                 Number(l.damping ?? 22),
                 Number(l.staggerMs ?? idx * 35),
-                durationMs
+                durationMs,
+                60,
+                Number(l.startTimePct ?? 0.0),
+                Number(l.endTimePct ?? 1.0),
+                idx
               );
             });
           baseResult.layers = builtLayers;
@@ -214,36 +245,45 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
 
     baseResult.usedLiveMetaApi = true;
     pipelineLogs.push(
-      `Muse Spark 1.3 (${MUSE_MODEL_ID}): Extracted 2-part storyboard ("${baseResult.interactionTitle}") across ${imageBlocks.length} frames.`
+      `Muse Spark 1.3 (${MUSE_MODEL_ID}): Extracted 3-stage storyboard ("${baseResult.interactionTitle}") across ${imageBlocks.length} frames.`
     );
 
     // ============================================================================
-    // STEP 2: Muse Spark 1.3 Full Multi-Part Visual Clone (Part 1 -> Transition -> Part 2) + SAM 3.1
+    // STEP 2: Muse Spark 1.3 Clean Multi-Stage Interactive Clone + SAM 3.1
     // ============================================================================
     const synthesisPrompt = `You are Meta Muse Spark 1.3 powering MotionClone.
-Look carefully at all ${imageBlocks.length} chronological frames from "${fileName}" AND the extracted Multi-Part Storyboard below:
+Look carefully at all ${imageBlocks.length} chronological frames from "${fileName}" AND the extracted Multi-Stage Storyboard below:
 
 - Animation Title: ${baseResult.interactionTitle}
-- PART 1 (First Half of Animation - MUST BE FULLY CLONED!): ${part1Description}
-- TRANSITION (Morph from Part 1 to Part 2): ${transitionDescription}
-- PART 2 (Second Half of Animation - MUST BE FULLY CLONED!): ${part2Description}
+- STAGE 1 (First Part of Animation): ${stage1Description}
+- STAGE 2 (Middle Scan / Transition Morph): ${stage2Description}
+- STAGE 3 (Final Part of Animation): ${stage3Description}
 
-CRITICAL INSTRUCTION — DO NOT SKIP PART 1!
-Previously, only Part 2 (the final state) was rendered. You MUST build and animate BOTH PART 1 and PART 2 in full visual detail:
-1. Draw a complete, high-precision inline <svg> (or DOM structure) for PART 1:
-   - For example, if Part 1 is an Apple Face ID glyph, you MUST draw all 4 rounded corner brackets (top-left, top-right, bottom-left, bottom-right), both vertical eyes, the central J-shaped nose bridge, and the curved smiling mouth arc in glowing neon green, and animate Part 1 appearing and tilting/scanning in 3D perspective!
-   - If Part 1 is another UI component/icon, draw every sub-element of Part 1 accurately!
-2. Animate the TRANSITION where Part 1 twists/collapses/morphs into Part 2 using spring physics!
-3. Draw and animate PART 2 (e.g. the glowing neon-green oval ring expanding with spring bounce and the checkmark drawing in smoothly via stroke-dasharray/stroke-dashoffset).
-4. Make the HTML preview auto-play the FULL SEQUENCE continuously (Part 1 [0s - 1.5s] -> Morph & Part 2 [1.5s - 3.0s] -> brief hold -> loop back to Part 1), AND include a sleek pill control bar at the bottom of the preview with 3 buttons:
-   - "Auto-Play Full (Part 1 → Part 2)"
-   - "Part 1 Only" (shows/animates Part 1)
-   - "Part 2 Only" (shows/animates Part 2)
-5. Also restart from Part 1 whenever the graphic is clicked OR when \`window.addEventListener('message', e => { if (e.data === 'REPLAY_ANIMATION') ... })\` fires.
+STRICT VISUAL & CODE RULES (MUST FOLLOW 100%):
+1. CLONE ALL STAGES IN SEQUENCE (STAGE 1 -> STAGE 2 -> STAGE 3):
+   - Build separate, complete, detailed inline <svg> / DOM layers for Stage 1, Stage 2, and Stage 3 and transition between them smoothly using a clean JavaScript \`setStage(stageIdx)\` state machine that auto-advances every 1200ms in a continuous loop!
+   - If the video shows an Apple Face ID animation:
+     * Stage 1 MUST show the complete neon-green Face ID glyph (4 rounded corner brackets + 2 vertical eyes + central J-shaped nose + curved smile arc) popping in and tilting/scanning in 3D (transform: perspective(400px) rotateY(-14deg) rotateX(8deg) -> rotateY(14deg) rotateX(-6deg)).
+     * Stage 2 MUST smoothly collapse/morph the Face ID glyph with a 3D spin (rotateY(180deg) scale(0.85)) into the glowing neon-green oval ring.
+     * Stage 3 MUST expand the glowing neon-green oval ring with spring bounce (cubic-bezier(0.34, 1.56, 0.64, 1)) and draw the neon-green checkmark inside it using stroke-dasharray / stroke-dashoffset.
+2. MANDATORY SVG RULE — NEVER OMIT \`fill="none"\` ON STROKE PATHS:
+   - Every \`<svg>\` tag and every stroke element (\`<path>\`, \`<circle>\`, \`<ellipse>\`, \`<rect>\`, \`<polyline>\`) MUST explicitly set \`fill="none"\` (for example: \`<svg viewBox="0 0 120 120" fill="none">\`, \`<path d="..." fill="none" stroke="#4ade80" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />\`).
+   - NEVER put any diagonal black polygon, glare triangle, or clip-path wipe that covers half the icon!
+3. NO WHITE BACKGROUND BOX & NO SCROLLBARS:
+   - The preview iframe is 275px tall on a dark \`#050811\` background.
+   - Set \`html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #050811; display: flex; flex-direction: column; align-items: center; justify-content: center; }\`.
+   - Do NOT draw a white square card behind the black squircle! Place the dark squircle (around \`165px\` wide by \`190px\` tall, \`border-radius: 42px\`, \`background: #05070b\`, with a subtle \`1px solid rgba(74, 222, 128, 0.22)\` border and soft green glow) directly on the \`#050811\` canvas.
+4. VISIBLE STAGE SWITCHER PILLS AT BOTTOM:
+   - Beneath the squircle (with \`margin-top: 12px\`), render a compact row of 3 buttons:
+     * \`[▶ Auto-Loop All]\`
+     * \`[1. Part 1 (Scan)]\`
+     * \`[2. Part 2 (Check)]\`
+   - Highlight whichever stage is currently active so the user can watch it step through Part 1 -> Part 2 automatically OR click to inspect Part 1 or Part 2!
+   - Also restart from Stage 1 when the squircle is clicked OR when \`window.addEventListener('message', e => { if (e.data === 'REPLAY_ANIMATION') ... })\` fires.
 
 Output TWO fenced code blocks in your response:
-1. First, a \`\`\`html ... \`\`\` block containing a COMPLETE, self-contained HTML5 document (using <script src="https://cdn.tailwindcss.com"></script>) on a dark #050811 background that renders and animates BOTH Part 1 and Part 2 sequentially.
-2. Second, a \`\`\`tsx ... \`\`\` block containing the complete React + Framer Motion + Tailwind CSS component code recreating BOTH Part 1 and Part 2 with spring physics.`;
+1. First, a \`\`\`html ... \`\`\` block containing the COMPLETE, self-contained HTML5 document.
+2. Second, a \`\`\`tsx ... \`\`\` block containing the complete React + Framer Motion + Tailwind CSS component code recreating all stages with spring physics.`;
 
     const samConcept =
       customPrompts.split(",")[0]?.trim() ||
@@ -267,7 +307,7 @@ Output TWO fenced code blocks in your response:
           ],
         }),
       }),
-      keyframes[2]
+      keyframes[3]
         ? fetch(`${META_BASE_URL}/responses`, {
             method: "POST",
             headers: {
@@ -283,7 +323,7 @@ Output TWO fenced code blocks in your response:
                   role: "user",
                   content: [
                     { type: "input_text", text: samConcept },
-                    { type: "input_image", image_url: keyframes[2] },
+                    { type: "input_image", image_url: keyframes[3] },
                   ],
                 },
               ],
@@ -309,13 +349,13 @@ Output TWO fenced code blocks in your response:
         extractCodeBlock(rawSynthText, "typescript");
 
       if (htmlBlock) {
-        baseResult.livePreviewHtml = htmlBlock;
+        baseResult.livePreviewHtml = sanitizeGeneratedHtml(htmlBlock);
       }
       if (tsxBlock) {
         baseResult.codeExports.reactCode = tsxBlock;
       }
       pipelineLogs.push(
-        `Muse Spark 1.3 (${MUSE_MODEL_ID}): Synthesized multi-stage interactive clone (Part 1 → Part 2) & React Framer Motion code.`
+        `Muse Spark 1.3 (${MUSE_MODEL_ID}): Synthesized multi-stage interactive clone (Stage 1 → Stage 2 → Stage 3) & React Framer Motion code.`
       );
     }
 
@@ -325,6 +365,27 @@ Output TWO fenced code blocks in your response:
       pipelineLogs.push(
         `SAM 3.1 (${SAM_MODEL_ID}): Verified concept segmentation for "${samConcept}".`
       );
+    }
+
+    try {
+      fs.writeFileSync(
+        "/tmp/motionclone_debug.json",
+        JSON.stringify(
+          {
+            interactionTitle: baseResult.interactionTitle,
+            interactionSummary: baseResult.interactionSummary,
+            stage1Description,
+            stage2Description,
+            stage3Description,
+            layersCount: baseResult.layers.length,
+            livePreviewHtml: baseResult.livePreviewHtml,
+          },
+          null,
+          2
+        )
+      );
+    } catch {
+      // ignore
     }
   } catch (err) {
     return NextResponse.json(

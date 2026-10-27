@@ -11,6 +11,25 @@ export interface ExtractedVideoData {
   layers: TrackedLayer[];
 }
 
+const BRIGHT_PALETTE = ["#06b6d4", "#10b981", "#a855f7", "#f59e0b"];
+
+function ensureBrightColor(hex: string, fallbackIdx: number): string {
+  const clean = (hex || "").trim().toLowerCase();
+  if (
+    !clean.startsWith("#") ||
+    clean === "#000" ||
+    clean === "#000000" ||
+    clean === "#111" ||
+    clean === "#111827" ||
+    clean === "#0a0a0a" ||
+    clean === "#ffffff" ||
+    clean === "#fff"
+  ) {
+    return BRIGHT_PALETTE[fallbackIdx % BRIGHT_PALETTE.length];
+  }
+  return hex;
+}
+
 export function roundedRectSvg(x: number, y: number, w: number, h: number, r = 18): string {
   const rad = Math.max(2, Math.min(r, w / 2, h / 2));
   return `M ${(x + rad).toFixed(1)} ${y.toFixed(1)} H ${(x + w - rad).toFixed(1)} A ${rad.toFixed(1)} ${rad.toFixed(1)} 0 0 1 ${(x + w).toFixed(1)} ${(y + rad).toFixed(1)} V ${(y + h - rad).toFixed(1)} A ${rad.toFixed(1)} ${rad.toFixed(1)} 0 0 1 ${(x + w - rad).toFixed(1)} ${(y + h).toFixed(1)} H ${(x + rad).toFixed(1)} A ${rad.toFixed(1)} ${rad.toFixed(1)} 0 0 1 ${x.toFixed(1)} ${(y + h - rad).toFixed(1)} V ${(y + rad).toFixed(1)} A ${rad.toFixed(1)} ${rad.toFixed(1)} 0 0 1 ${(x + rad).toFixed(1)} ${y.toFixed(1)} Z`;
@@ -28,8 +47,12 @@ export function buildLayerFromBoxTrajectory(
   damping: number,
   staggerMs: number,
   durationMs: number,
-  numFrames = 60
+  numFrames = 60,
+  startTimePct = 0.0,
+  endTimePct = 1.0,
+  fallbackColorIdx = 0
 ): TrackedLayer {
+  const safeColor = ensureBrightColor(colorHex, fallbackColorIdx);
   const mass = 1.0;
   const k = Math.max(20, Math.min(1200, stiffness || 340));
   const c = Math.max(4, Math.min(120, damping || 22));
@@ -49,10 +72,14 @@ export function buildLayerFromBoxTrajectory(
 
   const frames: FrameBox[] = [];
   const telemetrySeries: TelemetryPoint[] = [];
+  const sPct = Math.max(0, Math.min(0.9, startTimePct));
+  const ePct = Math.max(sPct + 0.1, Math.min(1.0, endTimePct));
 
   for (let i = 0; i < numFrames; i++) {
-    const tMs = (i / Math.max(1, numFrames - 1)) * Math.max(400, durationMs);
-    const tau = Math.max(0, (tMs - staggerMs) / 1000);
+    const pct = i / Math.max(1, numFrames - 1);
+    const tMs = pct * Math.max(400, durationMs);
+    const localStartMs = Math.max(staggerMs, sPct * durationMs);
+    const tau = Math.max(0, (tMs - localStartMs) / 1000);
     const uFit = springStepScalar(tau, omega0, zeta);
     const jitter = i > 1 && i < numFrames - 3 ? Math.sin(i * 1.7) * 0.003 : 0;
     const uEmp = uFit + jitter;
@@ -62,6 +89,8 @@ export function buildLayerFromBoxTrajectory(
     const bw = Math.max(12, startBox.width + (endBox.width - startBox.width) * uEmp);
     const bh = Math.max(12, startBox.height + (endBox.height - startBox.height) * uEmp);
 
+    const isVisibleInFrame = pct >= sPct - 0.03 && pct <= ePct + 0.03;
+
     frames.push({
       frame_index: i,
       timestamp_ms: Number(tMs.toFixed(1)),
@@ -70,10 +99,10 @@ export function buildLayerFromBoxTrajectory(
       width: Number(bw.toFixed(1)),
       height: Number(bh.toFixed(1)),
       svg_path: roundedRectSvg(bx, by, bw, bh, 22),
-      confidence: 0.98,
+      confidence: isVisibleInFrame ? 0.98 : 0.0,
     });
 
-    const prevTau = Math.max(0, (tMs - 16.67 - staggerMs) / 1000);
+    const prevTau = Math.max(0, (tMs - 16.67 - localStartMs) / 1000);
     const uPrev = springStepScalar(prevTau, omega0, zeta);
     const dominantSpan =
       Math.max(
@@ -102,7 +131,7 @@ export function buildLayerFromBoxTrajectory(
     id,
     name,
     samPrompt,
-    colorHex,
+    colorHex: safeColor,
     role,
     frames,
     physics: {
@@ -131,9 +160,8 @@ export function buildLayerFromBoxTrajectory(
 }
 
 /**
- * Decodes ANY uploaded video File in the browser using an offscreen HTML5 <video> and <canvas>,
- * extracts 10 sequential keyframe screenshots covering both the first half (Part 1) and second half (Part 2)
- * of the animation for Muse Spark 1.3 vision analysis.
+ * Decodes ANY uploaded video File in the browser using a hardware-warmed <video> and <canvas>,
+ * extracting 10 sequential keyframe screenshots from start to end for Muse Spark 1.3 vision analysis.
  */
 export async function analyzeVideoFileFramesClient(file: File): Promise<ExtractedVideoData> {
   return new Promise((resolve, reject) => {
@@ -143,16 +171,41 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
     video.muted = true;
     video.playsInline = true;
     video.preload = "auto";
-    video.crossOrigin = "anonymous";
+    // Mount offscreen in DOM so macOS VideoToolbox hardware decoder decodes every .mov frame reliably
+    video.style.position = "fixed";
+    video.style.left = "-9999px";
+    video.style.top = "-9999px";
+    video.style.width = "320px";
+    video.style.height = "200px";
+    video.style.opacity = "0";
+    video.style.pointerEvents = "none";
+    document.body.appendChild(video);
 
     const STAGE_W = 640;
     const STAGE_H = 400;
 
+    const cleanup = () => {
+      try {
+        if (video.parentNode) video.parentNode.removeChild(video);
+      } catch {
+        // ignore
+      }
+      URL.revokeObjectURL(url);
+    };
+
     video.onloadeddata = async () => {
       try {
+        // Warm up decoder
+        try {
+          await video.play();
+          video.pause();
+        } catch {
+          // ignore autoplay block if any
+        }
+
         const rawDuration =
           Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 2.0;
-        const durationSec = Math.min(10.0, Math.max(0.4, rawDuration));
+        const durationSec = Math.min(12.0, Math.max(0.4, rawDuration));
         const numFrames = 60;
         const fps = Number((numFrames / durationSec).toFixed(1));
         const durationMs = Math.round(durationSec * 1000);
@@ -164,9 +217,8 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
         if (!ctx) throw new Error("Canvas 2D context unavailable");
 
         const keyframesDataUrls: string[] = [];
-        // Sample 10 keyframes across the full animation (skipping t=0.00s cover/watermark glitch,
-        // with dense sampling across BOTH the first half [5%-45%] and second half [55%-95%])
-        const sampleFractions = [0.05, 0.12, 0.2, 0.28, 0.36, 0.46, 0.56, 0.68, 0.82, 0.95];
+        // Sample 10 keyframes across the entire timeline from 2% to 96%
+        const sampleFractions = [0.02, 0.12, 0.22, 0.32, 0.42, 0.52, 0.64, 0.76, 0.88, 0.96];
 
         const seekTo = (timeSec: number) =>
           new Promise<void>((resSeek) => {
@@ -179,15 +231,14 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
               if (resolved) return;
               resolved = true;
               video.removeEventListener("seeked", onSeeked);
-              // Wait a frame + 40ms so hardware decoder flushes the exact frame into the texture
               requestAnimationFrame(() => {
-                setTimeout(() => resSeek(), 40);
+                setTimeout(() => resSeek(), 50);
               });
             };
             const onSeeked = () => finish();
             video.addEventListener("seeked", onSeeked);
             video.currentTime = target;
-            setTimeout(finish, 350);
+            setTimeout(finish, 600);
           });
 
         for (const frac of sampleFractions) {
@@ -208,11 +259,15 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
             360,
             22,
             0,
-            durationMs
+            durationMs,
+            60,
+            0.0,
+            1.0,
+            0
           ),
           buildLayerFromBoxTrajectory(
             "layer-2",
-            "Stage 1 Initial Graphic",
+            "Part 1 Initial Graphic",
             "first stage animated icon or graphic",
             "#10b981",
             "media",
@@ -221,7 +276,11 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
             410,
             20,
             20,
-            durationMs
+            durationMs,
+            60,
+            0.0,
+            0.55,
+            1
           ),
         ];
 
@@ -237,12 +296,12 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
       } catch (err) {
         reject(err);
       } finally {
-        URL.revokeObjectURL(url);
+        cleanup();
       }
     };
 
     video.onerror = () => {
-      URL.revokeObjectURL(url);
+      cleanup();
       reject(new Error("Could not decode video file in browser."));
     };
   });

@@ -108,12 +108,15 @@ export async function POST(request: Request) {
     const detectionPrompt = `You are Meta Muse Spark 1.3 powering MotionClone.
 Examine all ${imageBlocks.length} chronological video frames (scaled to 640x400 pixels) from "${fileName}", from Frame 1 (start of video) to Frame ${imageBlocks.length} (end of video).
 
-Perform a high-precision, frame-by-frame micro-choreography breakdown across 5 sequential phases so our compiler can recreate the animation with >90% visual & motion accuracy:
-- Look at Frame 1 & Frame 2: Identify the exact initial UI element (e.g. wide bright-blue pill button with white lightning bolt and "Bentomotion" text on a light off-white background) and how it compresses horizontally with motion blur.
-- Look at Frame 3: Notice how the blue pill morphs into the tall pitch-black squircle with a translucent gray outer expansion halo while the inner graphic (e.g. neon-green Face ID face & 4 brackets) unblurs from soft glow to crisp lines.
-- Look at Frame 4 & Frame 5: Notice how the inner face (eyes, nose, mouth) dims to ~30% opacity while the 4 outer corner brackets lengthen and join into a continuous rounded-square perimeter loop!
-- Look at Frame 6 & Frame 7: Notice how the green loop collapses horizontally into 3 tall vertical interlocking neon-green oval rings tumbling/crossing in 3D space!
-- Look at Frame 8, 9 & 10: Notice how the tumbling vertical ovals converge into 1 crisp glowing vertical oval ring, while a checkmark draws in slightly below center and scales up with a spring overshoot bounce!
+Perform a high-precision, frame-by-frame micro-choreography breakdown across 5 sequential phases:
+- Frame 1 & Frame 2: Wide bright-blue pill button with white lightning bolt and "Bentomotion" text on a light off-white background, compressing horizontally with motion blur.
+- Frame 3: Blue pill morphs into a tall pitch-black squircle with a translucent gray outer expansion halo while the inner neon-green Face ID face & 4 L-shaped rounded corner brackets unblur from soft glow to crisp lines.
+- Frame 4 & Frame 5: The inner face (eyes, J-nose, smile) dims to ~28% opacity while the 4 outer L-shaped corner brackets extend their straight arms along the 4 sides to connect into a rounded-rectangle loop!
+- Frame 6, Frame 7 & Frame 8 (THE 3D SPIN):
+  * Sub-step 4A (Frame 6): The green loop squeezes horizontally and tilts (+16deg) with a central vertical spine line and narrow tilted ellipses.
+  * Sub-step 4B (Frame 7): Two thick neon-green oval rings scissor/cross in an X-gyroscope pattern (-28deg and +28deg) over a translucent neon-green glowing interior core!
+  * Sub-step 4C (Frame 8): The outer ring aligns vertically (0deg, rx=31, ry=44) while an inner longitudinal 3D meridian ellipse (rx sweeping from 2 -> 18 -> 31) and central vertical spine line create a 3D wireframe globe that locks into the outer vertical oval!
+- Frame 9 & Frame 10: The 3D globe locks into 1 crisp glowing vertical oval ring while a checkmark draws in slightly below center at small scale and springs upward/outward into the bold centered checkmark!
 
 Return ONLY valid JSON matching this schema (no markdown commentary):
 {
@@ -122,9 +125,9 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
   "sceneBackgroundHex": "#eef1f5",
   "phase1_initialAndSqueeze": "Frame 1-2 exact visual & motion details",
   "phase2_containerMorphAndUnblur": "Frame 3 exact container morph, halo ring, and icon unblur details",
-  "phase3_bracketJoinAndFaceDim": "Frame 4-5 exact inner face dimming and outer bracket lengthening/joining details",
-  "phase4_3dTumblingOvals": "Frame 6-7 exact 3D tumbling vertical interlocking oval rings details",
-  "phase5_ovalLockAndCheckmarkSpring": "Frame 8-10 exact single vertical oval lock and two-stage checkmark draw + spring pop details",
+  "phase3_bracketJoinAndFaceDim": "Frame 4-5 exact Face ID geometry and outer bracket arm extension details",
+  "phase4_3dTumblingOvals": "Frame 6-8 exact 3-step 3D gyroscope spin (tilted squeeze -> X-crossed ovals -> vertical meridian globe sweep) details",
+  "phase5_ovalLockAndCheckmarkSpring": "Frame 9-10 exact single vertical oval lock and two-stage checkmark draw + spring pop details",
   "layers": [
     {
       "name": "Phase 1: Blue Pill Button (Initial & Squeeze)",
@@ -153,12 +156,12 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
       "staggerMs": 40
     },
     {
-      "name": "Phase 2-4: Neon-Green Face ID & 3D Gyro Ovals",
-      "samPrompt": "green Face ID icon and 3D spinning ovals",
+      "name": "Phase 2-4: Neon-Green Face ID & 3D Wireframe Globe",
+      "samPrompt": "green Face ID icon and 3D spinning globe rings",
       "colorHex": "#10b981",
       "role": "media",
       "startTimePct": 0.22,
-      "endTimePct": 0.72,
+      "endTimePct": 0.78,
       "startBox": { "x": 255, "y": 125, "width": 130, "height": 150 },
       "endBox": { "x": 250, "y": 120, "width": 140, "height": 160 },
       "stiffness": 390,
@@ -170,7 +173,7 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
       "samPrompt": "green oval ring with checkmark",
       "colorHex": "#f59e0b",
       "role": "media",
-      "startTimePct": 0.68,
+      "startTimePct": 0.74,
       "endTimePct": 1.0,
       "startBox": { "x": 260, "y": 125, "width": 120, "height": 150 },
       "endBox": { "x": 255, "y": 120, "width": 130, "height": 160 },
@@ -212,15 +215,15 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
 
     let sceneBackgroundHex = "#eef1f5";
     let phase1 =
-      "Wide bright-blue pill button (#007aff, 240x70px) with white lightning bolt and medium-weight 'Bentomotion' text holds for 0.45s, then squeezes horizontally (172x62px) with horizontal motion blur on the text.";
+      "Wide bright-blue pill button (#007aff, 236x68px) with white lightning bolt and medium-weight 'Bentomotion' text holds for 0.4s, then squeezes horizontally (172x62px) with horizontal motion blur on the text.";
     let phase2 =
-      "Blue pill morphs its width, height, border-radius, and color into a tall pitch-black squircle (168x204px, border-radius 48px, #050507) with a transient translucent gray outer halo (box-shadow 0 0 0 8px rgba(0,0,0,0.15)), while the neon-green (#8fff5e) Face ID glyph unblurs from blur(6px) to blur(0px).";
+      "Blue pill morphs into a tall pitch-black squircle (164x196px, border-radius 46px, #050507) with a transient 7px translucent gray outer halo, while the true Apple Face ID glyph unblurs from blur(6px) to blur(0px).";
     let phase3 =
-      "Inside the black squircle, the inner face (2 vertical eyes, J-nose, smile) dims to 25% opacity while the 4 outer corner brackets extend their stroke lengths (stroke-dasharray) and join into a continuous rounded-square perimeter loop.";
+      "The inner face (2 vertical eyes at y=46..56, central J-nose at x=60 y=46..63 hooking left to x=54, and curved smile at y=74..82) dims to 28% opacity while the 4 L-shaped rounded corner brackets extend their straight arms along the sides to connect into a rounded-rectangle loop.";
     let phase4 =
-      "The inner face disappears and the green perimeter loop collapses horizontally into 3 tall vertical interlocking neon-green oval ellipses (rx=25, ry=45) tumbling and crossing over each other in 3D space (rotateY and rotateZ) before converging to 0deg.";
+      "3-Stage 3D Gyroscope & Meridian Globe Spin: (4A) Loop squeezes horizontally and tilts +16deg with a central vertical spine bar; (4B) Two thick neon-green oval rings cross in an X-gyroscope pattern (-28deg and +28deg) over a translucent green core (rgba(143,255,94,0.22)); (4C) Outer oval aligns vertically (0deg, rx=31, ry=44) while an inner longitudinal meridian ellipse (rx sweeping 2 -> 18 -> 31) and central vertical line sweep outward into a 3D wireframe globe that locks into the outer vertical oval.";
     let phase5 =
-      "The tumbling ovals lock into a single crisp glowing vertical neon-green oval ring (rx=32, ry=45, stroke-width 8), and a bold neon-green checkmark draws in via stroke-dashoffset slightly below center and pops upward/outward with a spring overshoot bounce (scale 0.6 -> 1.18 -> 1.0).";
+      "All meridian rings lock into 1 crisp glowing vertical neon-green oval ring (rx=31, ry=44, stroke-width 8), interior fill fades to 0, and a bold neon-green checkmark draws in slightly below center at scale(0.62) and springs upward/outward with overshoot bounce (scale 1.18 -> 1.0).";
 
     const detectData = await detectResp.json();
     const rawDetectText: string =
@@ -311,44 +314,61 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
     );
 
     // ============================================================================
-    // STEP 2: Muse Spark 1.3 High-Precision 5-Phase Visual Clone (temp=0.1) + SAM 3.1
+    // STEP 2: Muse Spark 1.3 Exact Face ID Geometry & 3D Meridian Globe Synthesis
     // ============================================================================
     const synthesisPrompt = `You are Meta Muse Spark 1.3 powering MotionClone.
-Look carefully at all ${imageBlocks.length} chronological frames from "${fileName}" AND the 5-Phase Micro-Choreography Breakdown below:
+Look carefully at all ${imageBlocks.length} chronological frames from "${fileName}" AND the 5-Phase Breakdown below:
 
 - Animation Title: ${baseResult.interactionTitle}
-- Scene Background Color: ${sceneBackgroundHex} (Use a clean soft radial studio backdrop \`radial-gradient(circle at 50% 45%, #f8fafc 0%, #e2e8f0 100%)\` across the entire body so both the bright blue pill AND the pitch-black squircle morph pop with 100% of the contrast of the original video!)
-- PHASE 1 (0.00s - 0.65s | Blue Pill & Squeeze): ${phase1}
-- PHASE 2 (0.65s - 1.15s | Container Morph + Halo + Face ID Unblur): ${phase2}
-- PHASE 3 (1.15s - 1.65s | Inner Face Dims + 4 Brackets Join into Loop): ${phase3}
-- PHASE 4 (1.65s - 2.25s | 3D Tumbling Vertical Interlocking Ovals): ${phase4}
-- PHASE 5 (2.25s - 3.40s | Single Vertical Oval Lock + Two-Stage Checkmark Spring Pop): ${phase5}
+- Scene Background Color: ${sceneBackgroundHex}
+- PHASE 1 (Blue Pill & Squeeze): ${phase1}
+- PHASE 2 (Container Morph + Halo + Face ID Unblur): ${phase2}
+- PHASE 3 (Face ID Proportions & Bracket Extension): ${phase3}
+- PHASE 4 (3D Gyroscope & Longitudinal Meridian Globe Spin): ${phase4}
+- PHASE 5 (Vertical Oval Lock + Two-Stage Checkmark Spring Pop): ${phase5}
 
-STRICT HIGH-FIDELITY (>90% MATCH) CHOREOGRAPHY REQUIREMENTS:
-1. FULL-VIEWPORT LIGHT STUDIO BACKDROP (SO THE BLACK SQUIRCLE MORPH IS VISUALLY DRAMATIC):
-   - Set \`html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: radial-gradient(circle at 50% 45%, #f8fafc 0%, #e4e8f0 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, sans-serif; }\`.
-   - Use a fixed-height center stage (\`height: 210px; display: flex; align-items: center; justify-content: center;\`) so morphing the container never shifts the bottom control bar!
-2. EXACT 5-PHASE CONTINUOUS MORPHING TIMELINE ON \`#morph-card\`:
-   - Phase 0 (t = 0.00s): \`#morph-card\` is the wide bright-blue pill (\`width: 236px; height: 68px; border-radius: 999px; background: linear-gradient(180deg, #1d9bf0 0%, #007aff 100%); box-shadow: 0 10px 28px rgba(0, 122, 255, 0.32);\`) with the crisp white lightning bolt SVG and medium-weight (\`font-weight: 500; font-size: 20px; letter-spacing: -0.3px;\`) white "Bentomotion" text.
-   - Phase 1 (t = 0.45s, Squeeze): \`#morph-card\` compresses horizontally (\`width: 174px; height: 62px;\`) while \`#pill-label\` scales horizontally (\`transform: scaleX(0.84); filter: blur(2.5px); opacity: 0.75;\`).
-   - Phase 2 (t = 0.70s, Squircle Morph + Halo + Face ID Unblur): \`#morph-card\` morphs with spring overshoot (\`transition: width 0.48s cubic-bezier(0.34, 1.56, 0.64, 1), height 0.52s cubic-bezier(0.34, 1.56, 0.64, 1), border-radius 0.45s ease, background 0.28s ease\`) into the tall pitch-black squircle (\`width: 164px; height: 196px; border-radius: 46px; background: #050507; box-shadow: 0 0 0 7px rgba(0,0,0,0.14), 0 18px 40px rgba(0,0,0,0.22);\`). After 260ms, the \`7px\` gray outer morph halo smoothly relaxes to \`0 0 0 0px rgba(0,0,0,0), 0 18px 40px rgba(0,0,0,0.24)\`. Simultaneously, the neon-green (\`#8fff5e\`) Face ID glyph (4 rounded corner brackets + 2 vertical eyes + central J-nose + curved smile) fades in from \`opacity: 0; filter: blur(6px); transform: scale(0.84)\` to crisp \`opacity: 1; filter: blur(0px); transform: scale(1)\`.
-   - Phase 3 (t = 1.25s, Face Dim + Bracket Perimeter Join — matches Frame 4!): Inside the Face ID SVG, the inner face group (\`#face-features\`: eyes, nose, smile) dims to \`opacity: 0.25; transform: scale(0.92)\`, while a continuous rounded-square perimeter loop (\`<rect x="24" y="24" width="72" height="72" rx="22" fill="none" stroke="#8fff5e" stroke-width="7" />\`) draws/fades in around the 4 corner brackets so the brackets visually join into a glowing green rounded square!
-   - Phase 4 (t = 1.65s, 3D Tumbling Vertical Interlocking Ovals — matches Frames 5 & 6!): The Face ID layer fades out as \`#gyro-layer\` appears with 3 TALL VERTICAL neon-green ellipses (\`<ellipse cx="60" cy="60" rx="26" ry="44" fill="none" stroke="#8fff5e" stroke-width="7.5" />\`) tumbling and crossing over each other in 3D (\`rotateY\` and \`rotateZ\` from \`-55deg\` / \`+55deg\` / \`rotateX(35deg)\` smoothly converging toward \`0deg\`) with a soft neon glow (\`filter: drop-shadow(0 0 10px rgba(143,255,94,0.6))\`).
-   - Phase 5 (t = 2.20s, Single Vertical Oval Lock + Checkmark Draw & Spring Pop — matches Frames 8 & 9!): \`#gyro-layer\` locks seamlessly into \`#final-layer\`: a single crisp vertical neon-green oval ring (\`<ellipse cx="60" cy="60" rx="30" ry="43" fill="none" stroke="#8fff5e" stroke-width="8" />\`). Inside it, the checkmark (\`<path d="M47 62 L56 73 L75 49" fill="none" stroke="#8fff5e" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />\`) first draws in via \`stroke-dashoffset\` at a slightly smaller scale (\`transform: translateY(4px) scale(0.68)\`) and then pops upward/outward with an underdamped spring bounce (\`scale(1.18) -> scale(1.0)\`)!
-3. MANDATORY SVG RULE:
-   - Every \`<svg>\` and every stroke element (\`<path>\`, \`<rect>\`, \`<ellipse>\`, \`<circle>\`, \`<polyline>\`) MUST explicitly set \`fill="none"\` (except the white lightning bolt icon in the blue pill).
-4. SLEEK BOTTOM STAGE CONTROLLER BAR:
-   - Beneath the stage (\`margin-top: 8px\`), render a dark frosted-glass pill bar (\`background: rgba(15, 23, 42, 0.88); padding: 4px; border-radius: 999px;\`) with 5 compact buttons:
-     * \`▶ Auto-Loop\`
-     * \`1. Blue Pill\`
-     * \`2. Face ID\`
-     * \`3. 3D Spin\`
-     * \`4. Checkmark\`
-   - Clicking any phase button pauses auto-loop and jumps to that exact phase so the user can inspect it; clicking \`▶ Auto-Loop\`, clicking \`#morph-card\`, or receiving \`REPLAY_ANIMATION\` via \`window.addEventListener('message', ...)\` plays the full 5-phase sequence!
+CRITICAL GEOMETRIC & ANIMATION SPECIFICATIONS (FOLLOW EXACTLY FOR >95% VISUAL MATCH):
+
+1. EXACT APPLE FACE ID SVG PROPORTIONS (viewBox="0 0 120 120", stroke="#8fff5e", fill="none"):
+   - Do NOT draw circular arcs for the 4 brackets! Each Face ID bracket is an L-shaped corner with straight vertical and horizontal legs and a 13px radius corner:
+     * Top-Left Bracket: \`<path d="M 26 44 V 35 A 11 11 0 0 1 37 24 H 46" fill="none" stroke="#8fff5e" stroke-width="6.5" stroke-linecap="round" />\`
+     * Top-Right Bracket: \`<path d="M 74 24 H 83 A 11 11 0 0 1 94 35 V 44" fill="none" stroke="#8fff5e" stroke-width="6.5" stroke-linecap="round" />\`
+     * Bottom-Left Bracket: \`<path d="M 26 76 V 85 A 11 11 0 0 0 37 96 H 46" fill="none" stroke="#8fff5e" stroke-width="6.5" stroke-linecap="round" />\`
+     * Bottom-Right Bracket: \`<path d="M 74 96 H 83 A 11 11 0 0 0 94 85 V 76" fill="none" stroke="#8fff5e" stroke-width="6.5" stroke-linecap="round" />\`
+   - Exact Inner Face Features (\`<g id="face-features">\`, well-spaced inside the brackets so the smile never touches the bottom brackets!):
+     * Left Eye: \`<path d="M 45 46 V 55" fill="none" stroke="#8fff5e" stroke-width="6.5" stroke-linecap="round" />\`
+     * Right Eye: \`<path d="M 75 46 V 55" fill="none" stroke="#8fff5e" stroke-width="6.5" stroke-linecap="round" />\`
+     * Center J-Nose: \`<path d="M 60 46 V 60 A 4.5 4.5 0 0 1 55.5 64.5 H 53.5" fill="none" stroke="#8fff5e" stroke-width="6.5" stroke-linecap="round" />\`
+     * Curved Smile: \`<path d="M 47 73 Q 60 83 73 73" fill="none" stroke="#8fff5e" stroke-width="6.5" stroke-linecap="round" />\`
+   - Bracket Extension in Phase 3 (Frame 5):
+     * When Phase 3 triggers, \`#face-features\` dims to \`opacity: 0.28\`, and a continuous rounded-rectangle perimeter path (\`<rect id="perimeter-loop" x="26" y="24" width="68" height="72" rx="18" fill="none" stroke="#8fff5e" stroke-width="6.5" stroke-dasharray="70 0" />\`) smoothly animates in so the 4 corner brackets visually extend their straight arms and connect into a glowing green rounded rectangle around the dimmed face!
+
+2. EXACT 3D GYROSCOPE & LONGITUDINAL MERIDIAN GLOBE SPIN (Frames 6, 7 & 8 — Continuous \`requestAnimationFrame\` SVG Parameter Interpolation!):
+   - Do NOT use a weak 20-degree CSS tilt! Drive \`#gyro-layer\` (\`<svg width="120" height="120" viewBox="0 0 120 120" fill="none">\`) using a smooth 60fps \`requestAnimationFrame\` function \`renderGyro(progress)\` where \`progress\` goes from \`0.0\` to \`1.0\` over \`680ms\`:
+     * Include a translucent neon-green glowing interior core: \`<ellipse id="gyro-core" cx="60" cy="60" rx="26" ry="40" fill="rgba(143, 255, 94, 0.22)" stroke="none" />\`
+     * Include 3 dynamic stroke ellipses + 1 central vertical meridian spine inside \`#gyro-layer\`:
+       - \`<ellipse id="ring-a" cx="60" cy="60" rx="22" ry="43" fill="none" stroke="#8fff5e" stroke-width="7" />\`
+       - \`<ellipse id="ring-b" cx="60" cy="60" rx="22" ry="43" fill="none" stroke="#8fff5e" stroke-width="7" />\`
+       - \`<ellipse id="ring-meridian" cx="60" cy="60" rx="14" ry="43" fill="none" stroke="#8fff5e" stroke-width="6.5" />\`
+       - \`<line id="spine-line" x1="60" y1="17" x2="60" y2="103" stroke="#8fff5e" stroke-width="6.5" stroke-linecap="round" />\`
+     * In \`renderGyro(p)\` (\`p\` in \`[0, 1]\`):
+       - **From \`p = 0.0\` to \`0.35\` (matches Frame 6 — tilted compressed vertical ovals + spine):**
+         \`ring-a\` rotates from \`+18deg\` to \`-28deg\` with \`rx\` growing \`14 -> 22\`; \`ring-b\` rotates from \`+14deg\` to \`+28deg\` with \`rx\` growing \`10 -> 22\`; \`spine-line\` is tilted \`+15deg -> 0deg\`; \`gyro-core\` opacity is \`0.24\`.
+       - **From \`p = 0.35\` to \`0.68\` (matches Frame 7 — X-crossed gyroscope ovals):**
+         \`ring-a\` (\`-28deg -> 0deg\`) and \`ring-b\` (\`+28deg -> 0deg\`) scissor together toward vertical (\`0deg\`) while \`rx\` expands \`22 -> 31\`; \`ring-meridian\` is upright (\`0deg\`) with \`rx\` sweeping \`4 -> 16\`.
+       - **From \`p = 0.68\` to \`1.0\` (matches Frame 8 — vertical oval + central vertical spine + inner meridian sweeping outward to lock!):**
+         \`ring-a\` and \`ring-b\` are locked vertically at \`0deg\` (\`rx=31, ry=43\`), \`spine-line\` is dead-center vertical (\`x1=60, x2=60\`) and fades out from \`p=0.85..1.0\`, while \`ring-meridian\` sweeps its horizontal radius \`rx\` from \`15\` all the way out to \`31\` (merging seamlessly into the outer \`rx=31\` vertical oval!) as \`gyro-core\` fades cleanly to \`0\`!
+
+3. TWO-STAGE CHECKMARK DRAW-IN & SPRING POP (Frames 9 & 10):
+   - Immediately at \`p = 1.0\`, show \`#final-layer\` with the locked vertical oval (\`<ellipse cx="60" cy="60" rx="31" ry="43" fill="none" stroke="#8fff5e" stroke-width="8" />\`).
+   - Inside it, \`#check-wrap\` starts at \`transform: translateY(5px) scale(0.62)\` while \`#check-path\` (\`d="M 47 62 L 56 72 L 75 49"\`) draws in over \`220ms\`, and then pops upward/outward with an underdamped spring bounce (\`cubic-bezier(0.34, 1.85, 0.64, 1)\`) to \`translateY(0px) scale(1.0)\`!
+
+4. STUDIO BACKDROP & INTERACTIVE CONTROLS:
+   - Keep the full-viewport soft light studio backdrop (\`radial-gradient(circle at 50% 45%, #f8fafc 0%, #e4e8f0 100%)\`), fixed \`210px\` stage wrapper, and the 5 bottom buttons: \`▶ Auto-Loop\`, \`1. Blue Pill\`, \`2. Face ID\`, \`3. 3D Spin\` (clicking \`3. 3D Spin\` loops \`renderGyro(p)\` continuously so the user can admire the 3D gyroscope spin!), and \`4. Checkmark\`.
 
 Output TWO fenced code blocks in your response:
-1. First, a \`\`\`html ... \`\`\` block containing the COMPLETE, self-contained HTML5 document implementing all 5 phases with >90% visual accuracy.
-2. Second, a \`\`\`tsx ... \`\`\` block containing the complete React + Framer Motion + Tailwind CSS component code recreating all 5 phases with spring physics.`;
+1. First, a \`\`\`html ... \`\`\` block containing the COMPLETE, self-contained HTML5 document.
+2. Second, a \`\`\`tsx ... \`\`\` block containing the complete React + Framer Motion + Tailwind CSS component code recreating all 5 phases.`;
 
     const samConcept =
       customPrompts.split(",")[0]?.trim() ||
@@ -421,7 +441,7 @@ Output TWO fenced code blocks in your response:
         baseResult.codeExports.reactCode = tsxBlock;
       }
       pipelineLogs.push(
-        `Muse Spark 1.3 (${MUSE_MODEL_ID}): Synthesized 5-phase high-precision clone (Pill Squeeze → Squircle Halo Morph → Bracket Loop → 3D Vertical Ovals → Spring Checkmark).`
+        `Muse Spark 1.3 (${MUSE_MODEL_ID}): Synthesized exact Face ID L-brackets & 60fps 3D longitudinal meridian globe spin.`
       );
     }
 

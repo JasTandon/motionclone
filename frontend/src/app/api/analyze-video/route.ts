@@ -111,9 +111,9 @@ Examine all ${imageBlocks.length} chronological video frames (scaled to 640x400 
 Perform a high-precision, frame-by-frame micro-choreography breakdown across 5 sequential phases:
 - Frame 1 & Frame 2: Wide bright-blue pill button with white lightning bolt and "Bentomotion" text on a light off-white background, compressing horizontally with motion blur.
 - Frame 3: Blue pill morphs into a tall pitch-black squircle with a translucent gray outer expansion halo while the inner neon-green Face ID face & 4 L-shaped rounded corner brackets unblur from soft glow to crisp lines.
-- Frame 4 & Frame 5: The inner face (eyes, J-nose, smile) dims to ~28% opacity while the 4 outer L-shaped corner brackets extend their straight arms along the 4 sides to connect into a rounded-rectangle loop!
-- Frame 6, Frame 7 & Frame 8: The green loop collapses into 3 vertical interlocking neon-green oval rings that perform a full 360-degree 3D gyroscope spin (rotating around Y, X, and Z axes in 3D perspective over a soft green glow core) and converge into alignment at 0deg!
-- Frame 9 & Frame 10: The 3D spinning ovals lock into 1 crisp glowing vertical oval ring while a checkmark draws in slightly below center at small scale and springs upward/outward into the bold centered checkmark!
+- Frame 4 & Frame 5: The inner face (eyes, J-nose, smile) dims to ~28% opacity while the 4 outer L-shaped corner brackets dynamically grow their straight arms to close the 4 side gaps and simultaneously round their corners toward an oval!
+- Frame 6, Frame 7 & Frame 8: The connected green loop seamlessly transitions into 3 constant-thickness 3D wireframe oval rings tumbling in 3D space (first tilted +16deg compressed coil, then X-scissored at -28deg/+28deg over a soft green core, then vertical outer oval + inner longitudinal meridian ring + central vertical spine sweeping outward into alignment).
+- Frame 9 & Frame 10: The 3D globe locks into 1 crisp glowing vertical oval ring while a checkmark draws in slightly below center at small scale and springs upward/outward into the bold centered checkmark!
 
 Return ONLY valid JSON matching this schema (no markdown commentary):
 {
@@ -122,8 +122,8 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
   "sceneBackgroundHex": "#eef1f5",
   "phase1_initialAndSqueeze": "Frame 1-2 exact visual & motion details",
   "phase2_containerMorphAndUnblur": "Frame 3 exact container morph, halo ring, and icon unblur details",
-  "phase3_bracketJoinAndFaceDim": "Frame 4-5 exact Face ID geometry and outer bracket arm extension details",
-  "phase4_3dTumblingOvals": "Frame 6-8 exact 360-degree 3D gyroscope spin details",
+  "phase3_bracketJoinAndFaceDim": "Frame 4-5 exact dynamic bracket arm extension and corner rounding details",
+  "phase4_3dTumblingOvals": "Frame 6-8 exact continuous 3D projected wireframe gyroscope & meridian globe details",
   "phase5_ovalLockAndCheckmarkSpring": "Frame 9-10 exact single vertical oval lock and two-stage checkmark draw + spring pop details",
   "layers": [
     {
@@ -216,11 +216,11 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
     let phase2 =
       "Single #morph-card morphs its width, height, border-radius, and color into a tall pitch-black squircle (160x190px, border-radius 44px, #050507) with a transient 7px translucent gray outer halo, while the neon-green (#8fff5e) Face ID glyph unblurs from blur(6px) to blur(0px).";
     let phase3 =
-      "Inside the black squircle, the inner face (2 vertical eyes, central J-nose hooking left, and curved smile) dims to 25% opacity while the 4 L-shaped rounded corner brackets extend their straight arms via stroke-dashoffset into a continuous rounded-rectangle loop.";
+      "The 4 L-shaped Face ID brackets continuously grow their straight arms to close the 4 side gaps (gap: 0.17 -> 0.0) while rounding their corners (roundness: 0.0 -> 1.0) into an oval as the inner face dims to 25% and scales down.";
     let phase4 =
-      "Inside #gyro-layer (perspective: 500px; transform-style: preserve-3d), 3 vertical neon-green oval rings (rx=30, ry=43) perform a full 360-degree 3D gyroscope spin (rotating around Y, Z, and X axes from tilted/crossed angles and converging smoothly to rotateX(0deg) rotateY(360deg) rotateZ(0deg)) over a soft glowing green core.";
+      "Using continuous 60fps 3D mathematical projection (so stroke-width stays a constant 7px even at 90deg edge-on!), 3 wireframe rings spin through: (4A) tilted +16deg compressed coil; (4B) -28deg/+28deg X-scissored gyroscope over a glowing green core; (4C) vertical outer oval + inner longitudinal meridian ring + central vertical spine sweeping outward to lock at 360deg.";
     let phase5 =
-      "The converged 3D rings lock seamlessly into 1 crisp glowing vertical neon-green oval ring (rx=30, ry=43, stroke-width 8), and a bold neon-green checkmark draws in slightly below center at scale(0.65) and pops upward/outward with a spring overshoot bounce (scale 1.18 -> 1.0).";
+      "All 3 rings lock seamlessly at 0deg/360deg into the single glowing vertical oval (rx=30, ry=43), and the checkmark draws in slightly below center at scale(0.62) and springs upward/outward with overshoot bounce (scale 1.18 -> 1.0).";
 
     const detectData = await detectResp.json();
     const rawDetectText: string =
@@ -311,7 +311,7 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
     );
 
     // ============================================================================
-    // STEP 2: Muse Spark 1.3 Single Morphing Container + True 360° 3D Gyroscope Spin
+    // STEP 2: Muse Spark 1.3 Unified 60fps Parametric 3D Bracket-to-Gyroscope Engine
     // ============================================================================
     const synthesisPrompt = `You are Meta Muse Spark 1.3 powering MotionClone.
 Look carefully at all ${imageBlocks.length} chronological frames from "${fileName}" AND the 5-Phase Breakdown below:
@@ -320,52 +320,103 @@ Look carefully at all ${imageBlocks.length} chronological frames from "${fileNam
 - Scene Background Color: ${sceneBackgroundHex}
 - PHASE 1 (Blue Pill & Squeeze): ${phase1}
 - PHASE 2 (Single Container Morph + Halo + Face ID Unblur): ${phase2}
-- PHASE 3 (Face ID Proportions & Bracket Loop): ${phase3}
-- PHASE 4 (Full 360-Degree 3D Perspective Gyroscope Spin): ${phase4}
+- PHASE 3 (Continuous Bracket-to-Oval Morph): ${phase3}
+- PHASE 4 (60fps Mathematical 3D Wireframe Gyroscope & Globe Spin): ${phase4}
 - PHASE 5 (Vertical Oval Lock + Two-Stage Checkmark Spring Pop): ${phase5}
 
-STRICT LAYOUT & GEOMETRY RULES (DO NOT VIOLATE — PREVENTS GOING OFF-FRAME!):
-1. STRICT COMPACT VIEWPORT SIZING (NEVER ADD TOP LABELS OR LARGE PADDING!):
-   - The preview iframe is 315px tall, and the top 36px of the parent panel has overlay badges.
-   - Set \`html, body { margin: 0; padding: 18px 0 0 0; width: 100%; height: 100%; overflow: hidden; background: radial-gradient(circle at 50% 45%, #f8fafc 0%, #e4e8f0 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, sans-serif; }\`.
-   - Do NOT add any header/title text above the animation!
-   - Use \`.stage { height: 200px; display: flex; align-items: center; justify-content: center; }\` and \`.controls { margin-top: 8px; }\` so the entire stage + bottom buttons is only 248px tall and stays 100% centered in the frame!
+WHY PREVIOUS CSS ROTATIONS LOOKED STIFF (AND HOW YOU MUST FIX IT):
+1. Previously, the 4 Face ID brackets were static paths and a separate <rect> faded in, followed by a hard opacity cut to CSS-rotated divs (which flatten stroke-width to 0px at 90deg rotateY!).
+2. Instead, inside the single morphing \`#morph-card\`, use ONE unified \`<svg id="canvas-svg" width="120" height="120" viewBox="0 0 120 120" fill="none">\` driven by a continuous 60fps \`requestAnimationFrame\` loop that projects 3D points into SVG \`<path>\` elements with constant \`stroke-width="7"\`!
+3. Use this exact mathematical helper \`buildRingPath(gap, roundness, rxDeg, ryDeg, rzDeg)\` inside your \`<script>\` so the 4 L-shaped Face ID brackets literally grow their arms, round into an oval, and spin in 3D with constant 7px neon tube thickness:
+   \`\`\`js
+   const lerp = (a, b, t) => a + (b - a) * t;
+   const clamp01 = (t) => Math.max(0, Math.min(1, t));
+   const easeInOut = (t) => 0.5 - 0.5 * Math.cos(Math.PI * clamp01(t));
 
-2. SINGLE MORPHING \`#morph-card\` ELEMENT (NEVER USE TWO SEPARATE PILL AND BLACK DIVS!):
-   - Use ONE \`#morph-card\` div that smoothly morphs its CSS properties:
-     * Default (Blue Pill): \`width: 232px; height: 66px; border-radius: 999px; background: linear-gradient(180deg, #1d9bf0 0%, #007aff 100%); box-shadow: 0 10px 26px rgba(0,122,255,0.32); transition: width 0.46s cubic-bezier(0.34,1.56,0.64,1), height 0.50s cubic-bezier(0.34,1.56,0.64,1), border-radius 0.42s ease, background 0.28s ease, box-shadow 0.35s ease;\`
-     * \`.squeezed\`: \`width: 172px; height: 60px;\` (while \`#pill-label\` has \`transform: scaleX(0.84); filter: blur(2.5px); opacity: 0.75;\`)
-     * \`.squircle\`: \`width: 160px; height: 190px; border-radius: 44px; background: #050507; box-shadow: 0 0 0 7px rgba(0,0,0,0.14), 0 16px 36px rgba(0,0,0,0.22);\`
-     * \`.squircle.no-halo\`: \`box-shadow: 0 0 0 0px rgba(0,0,0,0), 0 16px 36px rgba(0,0,0,0.24);\`
+   // Returns a 2D point on the rounded-rectangle (W=34, H=36, R=12) merged with vertical oval (rx=30, ry=43)
+   function shapePoint(q, u, roundness) {
+     // q in 0..3 (0: top-right, 1: bottom-right, 2: bottom-left, 3: top-left), u in [0, 1]
+     const W = 34, H = 36, R = 12;
+     let x = 0, y = 0;
+     if (u < 0.34) {
+       const t = u / 0.34;
+       x = lerp(0, W - R, t); y = -H;
+     } else if (u <= 0.66) {
+       const a = lerp(-Math.PI / 2, 0, (u - 0.34) / 0.32);
+       x = (W - R) + R * Math.cos(a); y = -(H - R) + R * Math.sin(a);
+     } else {
+       const t = (u - 0.66) / 0.34;
+       x = W; y = lerp(-(H - R), 0, t);
+     }
+     let rx = x, ry = y;
+     if (q === 1) { rx = x; ry = -y; u = 1 - u; }
+     // Better: use angle theta around the loop so all 4 quadrants are continuous and symmetric:
+     const theta = (q + u) * (Math.PI / 2) - Math.PI / 2;
+     const c = Math.cos(theta), s = Math.sin(theta);
+     const sx = Math.sign(c) || 1, sy = Math.sign(s) || 1;
+     const ac = Math.abs(c), as = Math.abs(s);
+     // Superellipse n=4.2 gives exact Apple Face ID L-bracket corners when roundness=0, and n=2.0 gives exact oval when roundness=1!
+     const exp = lerp(4.2, 2.0, roundness);
+     const radX = lerp(34, 30, roundness);
+     const radY = lerp(36, 43, roundness);
+     const px0 = sx * radX * Math.pow(ac, 2 / exp);
+     const py0 = sy * radY * Math.pow(as, 2 / exp);
+     return [px0, py0];
+   }
 
-3. EXACT APPLE FACE ID L-BRACKET & FACE GEOMETRY (\`#face-layer\`, \`viewBox="0 0 120 120"\`, \`width="116" height="116"\`):
-   - Draw the 4 corner brackets as true L-shaped corners with straight vertical/horizontal legs and 11px rounded corners:
-     * \`<path d="M 26 44 V 35 A 11 11 0 0 1 37 24 H 46" fill="none" stroke="#8fff5e" stroke-width="6.5" stroke-linecap="round" />\`
-     * \`<path d="M 74 24 H 83 A 11 11 0 0 1 94 35 V 44" fill="none" stroke="#8fff5e" stroke-width="6.5" stroke-linecap="round" />\`
-     * \`<path d="M 26 76 V 85 A 11 11 0 0 0 37 96 H 46" fill="none" stroke="#8fff5e" stroke-width="6.5" stroke-linecap="round" />\`
-     * \`<path d="M 74 96 H 83 A 11 11 0 0 0 94 85 V 76" fill="none" stroke="#8fff5e" stroke-width="6.5" stroke-linecap="round" />\`
-   - Draw \`#face-features\` well-spaced inside the brackets:
-     * Left eye: \`<path d="M 45 46 V 55" fill="none" stroke="#8fff5e" stroke-width="6.5" stroke-linecap="round" />\`
-     * Right eye: \`<path d="M 75 46 V 55" fill="none" stroke="#8fff5e" stroke-width="6.5" stroke-linecap="round" />\`
-     * J-nose: \`<path d="M 60 46 V 60 A 4.5 4.5 0 0 1 55.5 64.5 H 53.5" fill="none" stroke="#8fff5e" stroke-width="6.5" stroke-linecap="round" />\`
-     * Smile: \`<path d="M 47 73 Q 60 83 73 73" fill="none" stroke="#8fff5e" stroke-width="6.5" stroke-linecap="round" />\`
-   - Include \`<rect id="perimeter-loop" x="26" y="24" width="68" height="72" rx="14" fill="none" stroke="#8fff5e" stroke-width="6.5" />\` which animates its \`stroke-dasharray\` / \`opacity\` on when \`#face-features\` dims to \`0.25\`!
+   function project3D(x0, y0, rxDeg, ryDeg, rzDeg) {
+     const rx = rxDeg * Math.PI / 180, ry = ryDeg * Math.PI / 180, rz = rzDeg * Math.PI / 180;
+     // Rotate Y
+     let x1 = x0 * Math.cos(ry), y1 = y0, z1 = -x0 * Math.sin(ry);
+     // Rotate X
+     let x2 = x1, y2 = y1 * Math.cos(rx) - z1 * Math.sin(rx), z2 = y1 * Math.sin(rx) + z1 * Math.cos(rx);
+     // Rotate Z
+     let x3 = x2 * Math.cos(rz) - y2 * Math.sin(rz), y3 = x2 * Math.sin(rz) + y2 * Math.cos(rz), z3 = z2;
+     const fov = 260;
+     const scale = fov / (fov + z3);
+     return [60 + x3 * scale, 60 + y3 * scale];
+   }
 
-4. TRUE 360-DEGREE 3D PERSPECTIVE GYROSCOPE SPIN (\`#gyro-layer\`, \`perspective: 500px;\`):
-   - Inside \`#gyro-layer\`, place a glowing green core (\`<div class="gyro-core"></div>\` with \`width: 54px; height: 78px; border-radius: 50%; background: rgba(143,255,94,0.22); filter: blur(6px);\`) and 3 3D-transformed ring divs (\`.g-ring.r1\`, \`.g-ring.r2\`, \`.g-ring.r3\`), each containing \`<svg width="116" height="116" viewBox="0 0 120 120" fill="none"><ellipse cx="60" cy="60" rx="30" ry="43" fill="none" stroke="#8fff5e" stroke-width="7.5"/></svg>\`.
-   - When \`#gyro-layer.visible\` is active, animate all 3 rings over \`0.75s cubic-bezier(0.22, 1, 0.36, 1) forwards\` through a REAL 360-degree 3D gyroscope tumble that converges to \`rotateX(0deg) rotateY(360deg) rotateZ(0deg)\`:
-     * \`@keyframes spin1 { 0% { transform: rotateZ(18deg) rotateY(-70deg) scaleX(0.75); } 45% { transform: rotateZ(-28deg) rotateY(160deg) scaleX(1); } 100% { transform: rotateZ(0deg) rotateY(360deg) scaleX(1); } }\`
-     * \`@keyframes spin2 { 0% { transform: rotateZ(14deg) rotateY(40deg) scaleX(0.75); } 45% { transform: rotateZ(28deg) rotateY(220deg) scaleX(1); } 100% { transform: rotateZ(0deg) rotateY(360deg) scaleX(1); } }\`
-     * \`@keyframes spin3 { 0% { transform: rotateX(45deg) rotateY(0deg) scale(0.82); } 50% { transform: rotateX(-25deg) rotateY(190deg) scale(0.95); } 100% { transform: rotateX(0deg) rotateY(360deg) scale(1); } }\`
-   - Notice why this works so well: in 3D perspective (\`perspective: 500px\`), as \`rotateY\` passes through \`90deg\` and \`270deg\`, the rings naturally turn edge-on (forming the vertical center bar and narrow inner meridian ovals from Frames 6-8!) and then converge at \`360deg\` directly into the single vertical oval (\`rx="30" ry="43"\`) of \`#final-layer\`!
+   function buildRingPath(gap, roundness, rxDeg, ryDeg, rzDeg) {
+     let d = "";
+     const steps = 18;
+     for (let q = 0; q < 4; q++) {
+       const uStart = gap, uEnd = 1 - gap;
+       for (let i = 0; i <= steps; i++) {
+         const u = lerp(uStart, uEnd, i / steps);
+         const [x0, y0] = shapePoint(q, u, roundness);
+         const [px, py] = project3D(x0, y0, rxDeg, ryDeg, rzDeg);
+         d += (i === 0 && (gap > 0.002 || q === 0) ? "M " : "L ") + px.toFixed(1) + " " + py.toFixed(1) + " ";
+       }
+     }
+     if (gap <= 0.002) d += "Z";
+     return d;
+   }
+   \`\`\`
+4. LOOK AT HOW FLUID THIS TIMELINE IS WHEN DRIVEN BY \`requestAnimationFrame\` (\`t\` in ms from \`0\` to \`4200\`):
+   - \`0ms - 450ms\` (Phase 1 - Blue Pill): \`#morph-card\` is the wide blue pill (\`232x66px\`, \`#007aff\`) with \`⚡ Bentomotion\`.
+   - \`450ms - 750ms\` (Phase 1B - Squeeze): \`#morph-card\` squeezes to \`172x60px\` with text motion blur.
+   - \`750ms - 1350ms\` (Phase 2 - Squircle Morph + Unblur): \`#morph-card\` morphs to \`160x190px\` black squircle (\`#050507\`) with transient 7px gray halo; \`#canvas-svg\` unblurs (\`blur(7px) -> blur(0px)\`) showing the 4 Face ID brackets (\`buildRingPath(0.18, 0, 0, 0, 0)\`) and inner \`#face-features\` (eyes, J-nose, smile) at \`opacity: 1\`.
+   - \`1350ms - 1850ms\` (Phase 3 - Brackets Extend & Round into Oval, \`p = easeInOut((t - 1350)/500)\`):
+     * \`gap = lerp(0.18, 0.0, p)\` (the 4 Face ID brackets smoothly grow their arms until they connect into a closed loop!)
+     * \`roundness = lerp(0.0, 0.85, p * p)\` (the corners smoothly round from the Face ID square toward the oval!)
+     * \`#face-features\` dims \`opacity = lerp(1.0, 0.15, p)\` and scales \`scale(lerp(1, 0.82, p))\`.
+   - \`1850ms - 2850ms\` (Phase 4 - Fluid 3D Multi-Ring Gyroscope & Meridian Globe Spin, \`p = (t - 1850)/1000\`, \`ep = easeInOut(p)\`):
+     * \`#face-features\` opacity is \`0\`; \`#gyro-core\` (soft green radial glow \`rgba(143,255,94,0.22)\`) has \`opacity = Math.sin(p * Math.PI) * 0.95\`.
+     * All 3 rings use \`gap = 0, roundness = 1.0\` and spin smoothly in 3D with constant \`7px\` neon stroke width:
+       - \`ring1\` (\`#ring-1\`): \`rz = Math.sin(p * Math.PI * 2) * 28 * (1 - ep)\`, \`ry = ep * 360\`, \`rx = Math.sin(p * Math.PI) * 18\`
+       - \`ring2\` (\`#ring-2\`): \`rz = -Math.sin(p * Math.PI * 2) * 28 * (1 - ep)\`, \`ry = ep * 540\`, \`rx = -Math.sin(p * Math.PI) * 22\`
+       - \`ring3\` (\`#ring-3\`): \`rz = Math.sin(p * Math.PI) * 16 * (1 - ep)\`, \`ry = ep * 180\`, \`rx = Math.sin(p * Math.PI * 2) * 32 * (1 - ep)\`
+     * Notice that at \`p = 0\`, \`ring1\`, \`ring2\`, and \`ring3\` all start at \`(0, 0, 0)\` (matching the end of Phase 3!), during \`p = 0.2..0.8\` they create the tilted squeeze, the \`-28deg/+28deg\` X-gyroscope cross, AND the vertical meridian globe (as \`ry\` passes through \`90deg\` and \`270deg\` with constant \`7px\` stroke width!), and at \`p = 1.0\` (\`ep = 1.0\`) they all land at \`rx = 0, rz = 0, ry = 360/540/180\` — which is the **exact single vertical oval**!
+   - \`2850ms - 4100ms\` (Phase 5 - Oval Lock & Two-Stage Checkmark Spring Pop):
+     * \`ring1\` holds \`buildRingPath(0, 1, 0, 0, 0)\` (while \`ring2\` and \`ring3\` hide so stroke isn't tripled), and \`#check-path\` (\`d="M 47 62 L 56 72 L 75 49"\`) draws in at \`translateY(5px) scale(0.62)\` over \`240ms\` and then springs upward with \`cubic-bezier(0.34, 1.85, 0.64, 1)\` to \`translateY(0px) scale(1.0)\`!
 
-5. TWO-STAGE CHECKMARK DRAW & SPRING POP (\`#final-layer\`):
-   - \`<ellipse id="final-oval" cx="60" cy="60" rx="30" ry="43" fill="none" stroke="#8fff5e" stroke-width="8"/>\`
-   - \`#check-wrap\` starts at \`transform: translateY(4px) scale(0.65)\` as \`#check-path\` (\`d="M47 62 L56 73 L75 49"\`) draws in via \`stroke-dashoffset\`, then pops with \`cubic-bezier(0.34, 1.85, 0.64, 1)\` to \`translateY(0px) scale(1.0)\`!
+5. STRICT COMPACT VIEWPORT SIZING (SO NOTHING EVER GOES OFF-FRAME):
+   - Keep \`html, body { margin: 0; padding: 14px 0 0 0; width: 100%; height: 100%; overflow: hidden; background: radial-gradient(circle at 50% 45%, #f8fafc 0%, #e4e8f0 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; }\`, \`.stage { height: 200px; display: flex; align-items: center; justify-content: center; }\`, and the 5 compact bottom buttons (\`▶ Auto-Loop\`, \`1. Blue Pill\`, \`2. Face ID\`, \`3. 3D Spin\`, \`4. Checkmark\`).
 
 Output TWO fenced code blocks in your response:
-1. First, a \`\`\`html ... \`\`\` block containing the COMPLETE, self-contained HTML5 document.
-2. Second, a \`\`\`tsx ... \`\`\` block containing the complete React + Framer Motion + Tailwind CSS component code recreating all 5 phases.`;
+1. First, a \`\`\`html ... \`\`\` block containing the COMPLETE, self-contained HTML5 document using the 60fps \`buildRingPath\` 3D engine.
+2. Second, a \`\`\`tsx ... \`\`\` block containing the complete React + Framer Motion + Tailwind CSS component code.`;
 
     const samConcept =
       customPrompts.split(",")[0]?.trim() ||
@@ -438,7 +489,7 @@ Output TWO fenced code blocks in your response:
         baseResult.codeExports.reactCode = tsxBlock;
       }
       pipelineLogs.push(
-        `Muse Spark 1.3 (${MUSE_MODEL_ID}): Synthesized single-#morph-card 5-phase clone with 360° 3D perspective gyroscope spin.`
+        `Muse Spark 1.3 (${MUSE_MODEL_ID}): Synthesized 60fps parametric 3D superellipse bracket-to-gyroscope engine.`
       );
     }
 

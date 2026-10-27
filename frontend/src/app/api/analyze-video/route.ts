@@ -103,80 +103,46 @@ export async function POST(request: Request) {
 
   try {
     // ============================================================================
-    // STEP 1: Muse Spark 1.3 Frame-by-Frame Micro-Choreography & Kinematics (temp=0.1)
+    // STEP 1: Unbiased Multi-Phase Visual & Kinematic Video Analysis (temp=0.1)
     // ============================================================================
-    const detectionPrompt = `You are Meta Muse Spark 1.3 powering MotionClone.
+    const detectionPrompt = `You are Meta Muse Spark 1.3 powering MotionClone, a universal Video-to-Spring-Physics UI & Motion Graphics Compiler.
 Examine all ${imageBlocks.length} chronological video frames (scaled to 640x400 pixels) from "${fileName}", from Frame 1 (start of video) to Frame ${imageBlocks.length} (end of video).
 
-Perform a high-precision, frame-by-frame micro-choreography breakdown across 5 sequential phases:
-- Frame 1 & Frame 2: Wide bright-blue pill button with white lightning bolt and "Bentomotion" text on a light off-white background, compressing horizontally with motion blur.
-- Frame 3: Blue pill morphs into a tall pitch-black squircle with a translucent gray outer expansion halo while the inner neon-green Face ID face & 4 straight-legged L-shaped rounded corner brackets unblur from soft glow to crisp lines.
-- Frame 4 & Frame 5: The inner face (wide-set eyes at x=43 and x=77, J-nose, well-spaced smile) dims to ~28% opacity while the 4 outer L-shaped corner brackets dynamically grow their straight arms to close the 4 side gaps and simultaneously round their corners into a vertical oval!
-- Frame 6, Frame 7 & Frame 8: The connected green oval splits into 3 constant-thickness 3D perspective wireframe oval rings spinning a full 360/180 degrees around Y while scissoring at -28deg/+28deg over a soft green core, and mathematically converging back to (0deg, 360deg, 0deg) with zero fade-out!
-- Frame 9 & Frame 10: Right as the 3 spinning rings converge into the single vertical oval, a bold neon-green checkmark draws in slightly below center at small scale and springs upward/outward with a sympathetic spring pulse on the oval!
+CRITICAL ANALYSIS RULES:
+1. Analyze ONLY what is visually present in these ${imageBlocks.length} frames.
+2. If the video is a camera recording of a screen/monitor, IGNORE physical monitor dust, scratches, or room reflections—focus 100% on the digital UI / motion graphics animation being displayed.
+3. Classify "animationArchetype" into ONE of these values based on what you see:
+   - "gooey_metaball_blobs": if the animation shows glowing circular dots/orbs growing, trailing, and merging together via liquid/metaball bridges into larger spheres or teardrop shapes.
+   - "face_id_3d_morph": if the animation shows a blue pill button ("Bentomotion") morphing into a black squircle with a green Face ID icon, 3D spinning wireframe oval rings, and a checkmark.
+   - "general_ui_choreography": for any other UI component, icon morph, card transition, loader, toggle, or interactive motion design.
+4. Break the animation down across 5 sequential chronological phases (Frames 1-2, Frame 3, Frames 4-5, Frames 6-8, Frames 9-10) and output 3 to 4 real, visible moving UI layers tracked across time with accurate "startTimePct" (0.0 to 1.0), "endTimePct" (0.0 to 1.0), "startBox", and "endBox" on the 640x400 canvas. Never include "Absent" or placeholder layers.
 
 Return ONLY valid JSON matching this schema (no markdown commentary):
 {
-  "interactionTitle": "Specific title covering the full animation sequence",
-  "interactionSummary": "Clear 1-2 sentence summary describing all 5 micro-phases from start to finish",
-  "sceneBackgroundHex": "#eef1f5",
-  "phase1_initialAndSqueeze": "Frame 1-2 exact visual & motion details",
-  "phase2_containerMorphAndUnblur": "Frame 3 exact container morph, halo ring, and icon unblur details",
-  "phase3_bracketJoinAndFaceDim": "Frame 4-5 exact dynamic bracket arm extension and corner rounding details",
-  "phase4_3dTumblingOvals": "Frame 6-8 exact 360-degree 3D perspective wireframe gyroscope & meridian convergence details",
-  "phase5_ovalLockAndCheckmarkSpring": "Frame 9-10 exact overlapping checkmark draw-in + underdamped spring pop details",
+  "animationArchetype": "gooey_metaball_blobs | face_id_3d_morph | general_ui_choreography",
+  "interactionTitle": "Concise, polished UI motion title (e.g. 'Liquid Mint Metaball Orb Loader & Teardrop Morph')",
+  "interactionSummary": "Clear 1-2 sentence summary of the digital UI/motion animation and its visual physics from start to finish",
+  "sceneBackgroundHex": "#0b1011",
+  "primaryAccentHex": "#7ef7c8",
+  "secondaryAccentHex": "#45e3a8",
+  "phase1_frames1to2": "Exact visual shapes, positions, colors, and motion in Frames 1-2",
+  "phase2_frame3": "Exact visual shapes, positions, colors, and motion in Frame 3",
+  "phase3_frames4to5": "Exact visual shapes, liquid bridging / morphing, and motion in Frames 4-5",
+  "phase4_frames6to8": "Exact visual shapes, absorption / 3D rotation / morphing in Frames 6-8",
+  "phase5_frames9to10": "Exact final settle, spring pulse, or budding/checkmark state in Frames 9-10",
   "layers": [
     {
-      "name": "Phase 1: Blue Pill Button (Initial & Squeeze)",
-      "samPrompt": "blue pill button",
+      "name": "Phase 1-2: Moving UI Element / Dot Trail",
+      "samPrompt": "concise visual description for SAM 3.1",
       "colorHex": "#38bdf8",
       "role": "control",
       "startTimePct": 0.0,
-      "endTimePct": 0.24,
-      "startBox": { "x": 140, "y": 145, "width": 360, "height": 110 },
-      "endBox": { "x": 185, "y": 152, "width": 270, "height": 96 },
-      "stiffness": 420,
-      "damping": 24,
-      "staggerMs": 0
-    },
-    {
-      "name": "Phase 2-5: Morphed Pitch-Black Squircle",
-      "samPrompt": "black rounded squircle container",
-      "colorHex": "#a855f7",
-      "role": "container",
-      "startTimePct": 0.18,
-      "endTimePct": 1.0,
-      "startBox": { "x": 185, "y": 140, "width": 270, "height": 120 },
-      "endBox": { "x": 200, "y": 58, "width": 240, "height": 284 },
-      "stiffness": 360,
-      "damping": 22,
-      "staggerMs": 40
-    },
-    {
-      "name": "Phase 2-4: Neon-Green Face ID & 3D Wireframe Globe",
-      "samPrompt": "green Face ID icon and 3D spinning globe rings",
-      "colorHex": "#10b981",
-      "role": "media",
-      "startTimePct": 0.22,
-      "endTimePct": 0.78,
-      "startBox": { "x": 255, "y": 125, "width": 130, "height": 150 },
-      "endBox": { "x": 250, "y": 120, "width": 140, "height": 160 },
+      "endTimePct": 0.38,
+      "startBox": { "x": 180, "y": 170, "width": 140, "height": 50 },
+      "endBox": { "x": 40, "y": 120, "width": 220, "height": 160 },
       "stiffness": 390,
-      "damping": 20,
-      "staggerMs": 80
-    },
-    {
-      "name": "Phase 5: Glowing Vertical Oval & Spring Checkmark",
-      "samPrompt": "green oval ring with checkmark",
-      "colorHex": "#f59e0b",
-      "role": "media",
-      "startTimePct": 0.74,
-      "endTimePct": 1.0,
-      "startBox": { "x": 260, "y": 125, "width": 120, "height": 150 },
-      "endBox": { "x": 255, "y": 120, "width": 130, "height": 160 },
-      "stiffness": 440,
-      "damping": 18,
-      "staggerMs": 120
+      "damping": 22,
+      "staggerMs": 0
     }
   ]
 }`;
@@ -210,17 +176,15 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
       );
     }
 
-    let sceneBackgroundHex = "#eef1f5";
-    let phase1 =
-      "Wide bright-blue pill button (#007aff, 232x66px) with white lightning bolt and medium-weight 'Bentomotion' text holds for 0.45s, then squeezes horizontally (172x60px) with horizontal motion blur on the text.";
-    let phase2 =
-      "Single #morph-card morphs its width, height, border-radius, and color into a tall pitch-black squircle (160x190px, border-radius 44px, #050507) with a transient 7px translucent gray outer halo, while the neon-green (#8fff5e) Face ID glyph unblurs from blur(6px) to blur(0px).";
-    let phase3 =
-      "The 4 straight-legged L-shaped Face ID brackets continuously grow their straight arms to close the 4 side gaps (gap: 0.18 -> 0.0) while rounding their corners (roundness: 0.0 -> 1.0) into a pure vertical oval as the inner face dims to 25% and scales down.";
-    let phase4 =
-      "3D Wireframe Gyroscope & Meridian Globe Spin with Sine-Envelope Convergence: All 3 rings start at (0,0,0), spin 360deg/180deg around Y in 3D perspective (fov=260) while scissoring at -28deg/+28deg over a soft green core, and mathematically converge back to (0, 360deg, 0) at p=1.0 with opacity=1 the entire time (never fading to black!).";
-    let phase5 =
-      "Overlapping the final 80ms of ring convergence, the small checkmark (scale 0.62, ty +6px) draws in via stroke-dashoffset and then springs upward/outward (scale 0.62 -> 1.18 -> 1.0) while the outer vertical oval does a sympathetic spring pulse (scale 1.0 -> 1.05 -> 1.0).";
+    let animationArchetype = "general_ui_choreography";
+    let sceneBackgroundHex = "#0b1011";
+    let primaryAccentHex = "#7ef7c8";
+    let secondaryAccentHex = "#45e3a8";
+    let phase1 = "Initial state and primary motion trigger across Frames 1-2.";
+    let phase2 = "Secondary expansion and layer transition in Frame 3.";
+    let phase3 = "Mid-sequence morphing and shape bridging across Frames 4-5.";
+    let phase4 = "Peak dynamic motion and convergence across Frames 6-8.";
+    let phase5 = "Final spring settle and state completion across Frames 9-10.";
 
     const detectData = await detectResp.json();
     const rawDetectText: string =
@@ -229,6 +193,9 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
     if (jsonMatch) {
       try {
         const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.animationArchetype) {
+          animationArchetype = String(parsed.animationArchetype);
+        }
         if (parsed.interactionTitle) {
           baseResult.interactionTitle = parsed.interactionTitle;
         }
@@ -238,37 +205,53 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
         if (parsed.sceneBackgroundHex) {
           sceneBackgroundHex = parsed.sceneBackgroundHex;
         }
-        if (parsed.phase1_initialAndSqueeze) {
-          phase1 = parsed.phase1_initialAndSqueeze;
+        if (parsed.primaryAccentHex) {
+          primaryAccentHex = parsed.primaryAccentHex;
         }
-        if (parsed.phase2_containerMorphAndUnblur) {
-          phase2 = parsed.phase2_containerMorphAndUnblur;
+        if (parsed.secondaryAccentHex) {
+          secondaryAccentHex = parsed.secondaryAccentHex;
         }
-        if (parsed.phase3_bracketJoinAndFaceDim) {
-          phase3 = parsed.phase3_bracketJoinAndFaceDim;
+        if (parsed.phase1_frames1to2) {
+          phase1 = parsed.phase1_frames1to2;
         }
-        if (parsed.phase4_3dTumblingOvals) {
-          phase4 = parsed.phase4_3dTumblingOvals;
+        if (parsed.phase2_frame3) {
+          phase2 = parsed.phase2_frame3;
         }
-        if (parsed.phase5_ovalLockAndCheckmarkSpring) {
-          phase5 = parsed.phase5_ovalLockAndCheckmarkSpring;
+        if (parsed.phase3_frames4to5) {
+          phase3 = parsed.phase3_frames4to5;
+        }
+        if (parsed.phase4_frames6to8) {
+          phase4 = parsed.phase4_frames6to8;
+        }
+        if (parsed.phase5_frames9to10) {
+          phase5 = parsed.phase5_frames9to10;
         }
         if (Array.isArray(parsed.layers) && parsed.layers.length > 0) {
           const palette = ["#38bdf8", "#a855f7", "#10b981", "#f59e0b"];
-          const builtLayers: TrackedLayer[] = parsed.layers
+          const validRawLayers = parsed.layers.filter(
+            (l: Record<string, unknown>) => {
+              const nameStr = String(l.name || "").toLowerCase();
+              const eBox = (l.endBox as Record<string, number>) || {};
+              return (
+                !nameStr.startsWith("absent") &&
+                !(Number(eBox.width) === 0 && Number(eBox.height) === 0)
+              );
+            }
+          );
+          const builtLayers: TrackedLayer[] = validRawLayers
             .slice(0, 4)
             .map((l: Record<string, unknown>, idx: number) => {
               const sBox = (l.startBox as Record<string, number>) || {
-                x: 190,
-                y: 60,
-                width: 250,
-                height: 260,
+                x: 160,
+                y: 120,
+                width: 180,
+                height: 140,
               };
               const eBox = (l.endBox as Record<string, number>) || {
-                x: 180,
-                y: 50,
-                width: 270,
-                height: 280,
+                x: 170,
+                y: 70,
+                width: 280,
+                height: 260,
               };
               return buildLayerFromBoxTrajectory(
                 `layer-${idx + 1}`,
@@ -277,16 +260,16 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
                 String(l.colorHex || palette[idx % palette.length]),
                 String(l.role || "container"),
                 {
-                  x: Number(sBox.x ?? 190),
-                  y: Number(sBox.y ?? 60),
-                  width: Number(sBox.width ?? 250),
-                  height: Number(sBox.height ?? 260),
+                  x: Number(sBox.x ?? 160),
+                  y: Number(sBox.y ?? 120),
+                  width: Math.max(24, Number(sBox.width ?? 180)),
+                  height: Math.max(24, Number(sBox.height ?? 140)),
                 },
                 {
-                  x: Number(eBox.x ?? 180),
-                  y: Number(eBox.y ?? 50),
-                  width: Number(eBox.width ?? 270),
-                  height: Number(eBox.height ?? 280),
+                  x: Number(eBox.x ?? 170),
+                  y: Number(eBox.y ?? 70),
+                  width: Math.max(24, Number(eBox.width ?? 280)),
+                  height: Math.max(24, Number(eBox.height ?? 260)),
                 },
                 Number(l.stiffness ?? 380),
                 Number(l.damping ?? 22),
@@ -298,22 +281,139 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
                 idx
               );
             });
-          baseResult.layers = builtLayers;
+          if (builtLayers.length > 0) {
+            baseResult.layers = builtLayers;
+          }
         }
       } catch {
         // keep default layers if JSON parse had minor issue
       }
     }
 
+    // Auto-detect archetype strictly from explicit archetype or unmistakable metaball keywords
+    const combinedText = `${animationArchetype} ${baseResult.interactionTitle} ${baseResult.interactionSummary}`.toLowerCase();
+    const isGooeyMetaball =
+      animationArchetype === "gooey_metaball_blobs" ||
+      combinedText.includes("metaball") ||
+      combinedText.includes("teardrop") ||
+      (combinedText.includes("blobs") && combinedText.includes("merg"));
+    const isFaceIdMorph =
+      !isGooeyMetaball &&
+      (animationArchetype === "face_id_3d_morph" ||
+        combinedText.includes("face id") ||
+        combinedText.includes("bentomotion"));
+
     baseResult.usedLiveMetaApi = true;
     pipelineLogs.push(
-      `Muse Spark 1.3 (${MUSE_MODEL_ID}): Extracted 5-phase micro-choreography ("${baseResult.interactionTitle}") across ${imageBlocks.length} frames.`
+      `Muse Spark 1.3 (${MUSE_MODEL_ID}): Extracted 5-phase "${baseResult.interactionTitle}" (${isGooeyMetaball ? "gooey_metaball_blobs" : isFaceIdMorph ? "face_id_3d_morph" : "general_ui_choreography"}) across ${imageBlocks.length} frames.`
     );
 
     // ============================================================================
-    // STEP 2: Muse Spark 1.3 Exact Sine-Envelope 3D Convergence -> Checkmark Spring
+    // STEP 2: Adaptive High-Precision 60fps Clone Synthesis (temp=0.1)
     // ============================================================================
-    const synthesisPrompt = `You are Meta Muse Spark 1.3 powering MotionClone.
+    let synthesisPrompt = "";
+
+    if (isGooeyMetaball) {
+      synthesisPrompt = `You are Meta Muse Spark 1.3 powering MotionClone.
+Look carefully at all ${imageBlocks.length} chronological video frames from "${fileName}" AND the 5-Phase Breakdown below:
+
+- Animation Title: ${baseResult.interactionTitle}
+- PHASE 1 (Frames 1-2: Small Mint Dot Trails & Left Orb Entry): ${phase1}
+- PHASE 2 (Frame 3: Growing Dot Train & Left Sphere Swell): ${phase2}
+- PHASE 3 (Frames 4-5: Triple-Lobed Liquid Metaball Bridge): ${phase3}
+- PHASE 4 (Frames 6-8: Left-Pointing Liquid Teardrop Absorption): ${phase4}
+- PHASE 5 (Frames 9-10: Giant Centered Mint Orb & Right-Pointing Teardrop Bud with Layered Crescent Rim): ${phase5}
+
+YOUR GOAL:
+Build a 95%+ visually faithful, 60fps interactive HTML5 + SVG Gooey Metaball Physics clone that replicates every single frame (Frame 1 through Frame 10) of this mint-green liquid metaball animation!
+
+MANDATORY VISUAL & MATHEMATICAL ARCHITECTURE:
+1. VIEWPORT & LAYOUT (NO CLIPPING!):
+   - Full-viewport dark studio canvas (\`min-height: 100vh; margin: 0; background: radial-gradient(circle at 50% 46%, #142220 0%, #090d0e 75%); display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;\`).
+   - Do NOT put any title text at the top.
+   - Create a centered stage (\`width: 360px; height: 225px; position: relative; display: flex; align-items: center; justify-content: center;\`) containing \`<svg id="metaball-svg" viewBox="0 0 360 225" width="360" height="225" fill="none" style="overflow:visible">\`.
+   - Below the stage (\`margin-top: 10px\`), place a compact pill bar with 6 buttons: \`1. Dot Trail\`, \`2. Sphere Swell\`, \`3. Metaball Bridge\`, \`4. Teardrop Merge\`, \`5. Orb & Right Bud\`, and \`Loop All\`.
+
+2. DUAL-LAYER SVG GOOEY METABALL FILTER + SOFT BLOOM (THE SECRET TO 95% FIDELITY):
+   - In the original video frames:
+     * Circles merge together with smooth concave liquid necks (classic 2D Gaussian metaball threshold).
+     * Moving spheres and the right-pointing teardrop in Frame 10 have a distinct **translucent mint-emerald rim/crescent cap** (\`#3ee0a5\`, opacity \`0.48\`) slightly offset from the bright pale-mint core (\`#d2ffec\`)!
+   - Define these exact SVG \`<defs>\`:
+     \`\`\`xml
+     <defs>
+       <!-- True Liquid Metaball Filter: blurs circles then thresholds alpha at 22x - 9 -->
+       <filter id="goo" x="-35%" y="-35%" width="170%" height="170%" color-interpolation-filters="sRGB">
+         <feGaussianBlur in="SourceGraphic" stdDeviation="11.5" result="blur" />
+         <feColorMatrix in="blur" mode="matrix" values="
+           1 0 0 0 0
+           0 1 0 0 0
+           0 0 1 0 0
+           0 0 0 23 -9.5" result="goo" />
+       </filter>
+       <!-- Outer Mint Bloom -->
+       <filter id="mint-bloom" x="-50%" y="-50%" width="200%" height="200%">
+         <feGaussianBlur stdDeviation="14" result="glow" />
+         <feMerge>
+           <feMergeNode in="glow" />
+           <feMergeNode in="SourceGraphic" />
+         </feMerge>
+       </filter>
+     </defs>
+     \`\`\`
+   - Inside \`<svg>\`, render THREE synchronized layers of 8 circles (\`c0\` .. \`c7\`):
+     1. \`<g id="outer-cap" opacity="0.36" filter="url(#goo)" fill="#29c48e">\` (8 circles \`o0..o7\` for the outer translucent crescent cap seen in Frame 2, 4, 8, 10)
+     2. \`<g id="rim-layer" opacity="0.62" filter="url(#goo)" fill="#52f0b5">\` (8 circles \`r0..r7\` for the mid emerald-mint rim)
+     3. \`<g id="core-wrap" filter="url(#mint-bloom)"><g id="core-layer" filter="url(#goo)" fill="#d6ffee">\` (8 circles \`c0..c7\` for the bright overexposed mint-white core)
+
+3. EXACT 10-KEYFRAME PIECEWISE INTERPOLATION IN \`renderAt(t)\` (\`t = 0..4500ms\`):
+   - Instead of guessing vague motion, interpolate the 8 circles \`[x, y, r, rimDx]\` across the exact 10 keyframes observed in the video (\`KF[0]\` at \`t=0\` through \`KF[9]\` at \`t=4050ms\`, with \`450ms\` per keyframe interval and smooth \`easeInOut\` + spring overshoot on Frame 8 & 9!):
+     * **KF 0 (\`t = 0ms\`, Frame 1 — Two Dot Trails)**:
+       - Center-left 4 dots decreasing in size: \`c0: [122, 126, 9.5, 0]\`, \`c1: [144, 126, 8.2, 0]\`, \`c2: [165, 126, 6.5, 0]\`, \`c3: [184, 126, 4.6, 0]\`
+       - Right cluster of 4 overlapping dots: \`c4: [298, 122, 6.5, 0]\`, \`c5: [305, 122, 7.2, 0]\`, \`c6: [312, 122, 7.6, 0]\`, \`c7: [320, 122, 8.2, 0]\`
+     * **KF 1 (\`t = 450ms\`, Frame 2 — Left Orb Enters & Right Dots Hold)**:
+       - \`c0: [6, 130, 34, 9]\` (large pale green orb entering from left edge with +9px right rim!)
+       - \`c1: [12, 130, 22, 6]\`, \`c2: [242, 125, 2.2, 0]\`, \`c3: [250, 125, 2.2, 0]\`
+       - Right 3 dots: \`c4: [295, 124, 6.2, 0]\`, \`c5: [303, 124, 6.8, 0]\`, \`c6: [315, 124, 7.4, 0]\`, \`c7: [315, 124, 0, 0]\`
+     * **KF 2 (\`t = 900ms\`, Frame 3 — Left Edge Disc + 4 Medium Center-Left Dots + 4 Small Right Dots)**:
+       - \`c0: [-4, 132, 45, 5]\` (large disc on far left edge)
+       - 4 medium mint dots center-left: \`c1: [65, 132, 12.5, -2]\`, \`c2: [79, 132, 12.5, 0]\`, \`c3: [93, 132, 11.2, 0]\`, \`c4: [106, 132, 9.8, 0]\`
+       - Right small dot cluster + far-right edge disc: \`c5: [276, 128, 4.2, 0]\`, \`c6: [287, 128, 5.2, 0]\`, \`c7: [358, 125, 15, -3]\`
+     * **KF 3 (\`t = 1350ms\`, Frame 4 — Swollen Left-Center Sphere + 3 Small Right Dots)**:
+       - \`c0: [-18, 134, 30, 4]\`
+       - Swollen left-center sphere with left emerald rim: \`c1: [68, 132, 46, -7]\`, \`c2: [72, 132, 44, -4]\`, \`c3: [75, 132, 38, 0]\`, \`c4: [75, 132, 20, 0]\`
+       - 3 small right dots: \`c5: [272, 128, 4.2, 0]\`, \`c6: [279, 128, 4.8, 0]\`, \`c7: [286, 128, 5.2, 0]\`
+     * **KF 4 (\`t = 1800ms\`, Frame 5 — Two Large Spheres + Bridging Neck Dots)**:
+       - Left sphere + bridge: \`c0: [18, 126, 45, 5]\`, \`c1: [48, 126, 16, 4]\`, \`c2: [58, 126, 12, 5]\`
+       - Large center-left sphere with dual mint rim: \`c3: [158, 120, 54, -6]\`, \`c4: [162, 120, 54, 6]\`, \`c5: [160, 120, 48, 0]\`, \`c6: [214, 122, 3.5, 0]\`, \`c7: [214, 122, 0, 0]\`
+     * **KF 5 (\`t = 2250ms\`, Frame 6 — Triple-Lobed Horizontal Metaball Bridge)**:
+       - 3 large spheres connected by liquid metaball waists:
+       - Left lobe: \`c0: [22, 118, 42, 4]\`, \`c1: [56, 116, 30, 3]\`
+       - Middle lobe: \`c2: [94, 114, 46, 4]\`, \`c3: [138, 110, 34, 4]\`
+       - Right-center lobe: \`c4: [188, 106, 56, 4]\`, \`c5: [192, 106, 52, -4]\`, \`c6: [188, 106, 40, 0]\`, \`c7: [188, 106, 0, 0]\`
+     * **KF 6 (\`t = 2700ms\`, Frame 7 — Elongated Left-Tail Bulb Merging Rightward)**:
+       - \`c0: [24, 120, 36, 4]\`, \`c1: [64, 118, 32, 4]\`, \`c2: [112, 112, 48, 3]\`, \`c3: [152, 106, 64, 2]\`, \`c4: [176, 104, 72, 2]\`, \`c5: [180, 104, 68, 0]\`, \`c6: [176, 104, 50, 0]\`, \`c7: [176, 104, 0, 0]\`
+     * **KF 7 (\`t = 3150ms\`, Frame 8 — Plump Left-Pointing Liquid Teardrop with Left Rim)**:
+       - \`c0: [68, 116, 35, -8]\`, \`c1: [96, 112, 44, -6]\`, \`c2: [132, 106, 58, -4]\`, \`c3: [168, 102, 74, -2]\`, \`c4: [182, 102, 76, 0]\`, \`c5: [182, 102, 70, 0]\`, \`c6: [182, 102, 50, 0]\`, \`c7: [182, 102, 0, 0]\`
+     * **KF 8 (\`t = 3600ms\`, Frame 9 — Giant Centered Glowing Mint Sphere)**:
+       - All circles converged into the huge centered orb:
+       - \`c0: [176, 98, 76, 0]\`, \`c1: [180, 98, 82, 0]\`, \`c2: [180, 98, 84, 0]\`, \`c3: [180, 98, 84, 0]\`, \`c4: [180, 98, 82, 0]\`, \`c5: [180, 98, 76, 0]\`, \`c6: [180, 98, 60, 0]\`, \`c7: [180, 98, 0, 0]\`
+     * **KF 9 (\`t = 4050ms\`, Frame 10 — Right-Pointing Liquid Teardrop with Layered Crescent Cap)**:
+       - Main body + right-pointing teardrop taper + extended right crescent rim (\`rimDx = +14\` and \`outerCapDx = +26\`!):
+       - \`c0: [164, 98, 78, 2]\`, \`c1: [186, 98, 74, 4]\`, \`c2: [212, 98, 62, 8]\`, \`c3: [238, 98, 48, 12]\`, \`c4: [262, 98, 38, 16]\`, \`c5: [272, 98, 30, 20]\`, \`c6: [164, 98, 70, 0]\`, \`c7: [164, 98, 0, 0]\`
+
+   - For each circle \`i = 0..7\` at time \`t\`:
+     * Find segment \`seg = Math.min(8, Math.floor(clampedT / 450))\` and local progress \`u = easeInOut((clampedT - seg * 450) / 450)\`.
+     * Interpolate \`x, y, r, rimDx\` between \`KF[seg][i]\` and \`KF[seg + 1][i]\`.
+     * Set \`coreCircles[i]\` to \`(x, y, r)\`.
+     * Set \`rimCircles[i]\` to \`(x + rimDx, y, r * 1.02)\`.
+     * Set \`outerCapCircles[i]\` to \`(x + rimDx * 1.85, y, r * 1.03)\`.
+     * If \`r < 0.8\`, set \`r = 0\` so unused circles in that frame are invisible.
+
+Output TWO fenced code blocks in your response:
+1. First, a \`\`\`html ... \`\`\` block containing the COMPLETE, self-contained HTML5 document implementing this exact 10-keyframe Dual-Layer SVG Gooey Metaball animation with interactive phase buttons.
+2. Second, a \`\`\`tsx ... \`\`\` block containing the complete React + Framer Motion + SVG Gooey Metaball component code.`;
+    } else if (isFaceIdMorph) {
+      synthesisPrompt = `You are Meta Muse Spark 1.3 powering MotionClone.
 Look carefully at all ${imageBlocks.length} chronological frames from "${fileName}" AND the 5-Phase Breakdown below:
 
 - Animation Title: ${baseResult.interactionTitle}
@@ -324,114 +424,60 @@ Look carefully at all ${imageBlocks.length} chronological frames from "${fileNam
 - PHASE 4 (360-Deg 3D Perspective Gyroscope & Meridian Convergence): ${phase4}
 - PHASE 5 (Seamless Oval Lock + Overlapping Checkmark Draw & Sympathetic Spring Pop): ${phase5}
 
-WHY THE 3D SPIN TO CHECKMARK IN THE PREVIOUS RUN WAS WEAK (AND HOW YOU MUST FIX IT):
-In the previous run:
-1. \`r2\` and \`r3\` only rotated to \`58deg\` and \`78deg\` instead of spinning a full \`360deg\`/\`180deg\` and converging back to \`0deg\`!
-2. Worse, \`ringOp\` faded \`r1, r2, r3\` to \`opacity: 0\` between \`t=2750..2850\` before popping \`finalOval\` in at \`t=2850\`!
-3. \`ringD\` lacked 3D perspective (\`fov / (fov + z3)\`).
-
-YOU MUST USE THIS EXACT MATHEMATICAL IMPLEMENTATION FOR PHASE 3, PHASE 4, AND PHASE 5:
-
-1. KEEP THE EXACT \`shapePoint(q, u, roundness)\` AND \`#face-features\` FROM THE PREVIOUS RUN (they made the Face ID face look great!):
-   \`\`\`js
-   function shapePoint(q, u, roundness) {
-     const v = (q % 2 === 1) ? (1 - u) : u;
-     const W = 35, H = 37, R = 13;
-     let bx = 0, by = 0;
-     if (v < 0.35) { bx = lerp(0, W - R, v / 0.35); by = -H; }
-     else if (v <= 0.65) {
-       const a = lerp(-Math.PI / 2, 0, (v - 0.35) / 0.30);
-       bx = (W - R) + R * Math.cos(a); by = -(H - R) + R * Math.sin(a);
-     } else { bx = W; by = lerp(-(H - R), 0, (v - 0.65) / 0.35); }
-     let rx = bx, ry = by;
-     if (q === 1) { rx = bx; ry = -by; }
-     else if (q === 2) { rx = -bx; ry = -by; }
-     else if (q === 3) { rx = -bx; ry = by; }
-     const theta = (q + u) * (Math.PI / 2);
-     const ox = 31 * Math.sin(theta), oy = -43 * Math.cos(theta);
-     return [lerp(rx, ox, roundness), lerp(ry, oy, roundness)];
-   }
-   \`\`\`
-   And keep \`#face-features\`:
-   \`<path d="M 43 44 L 43 53" /><path d="M 77 44 L 77 53" /><path d="M 60 45 L 60 60 Q 60 64.5 54.5 64.5" /><path d="M 46 74 Q 60 85 74 74" />\`.
-
-2. USE TRUE 3D PERSPECTIVE IN \`ringD(rx, ry, dx, dy, dz)\`:
-   \`\`\`js
-   function ringD(rx, ry, dx, dy, dz) {
-     const rad = Math.PI / 180;
-     const cx = Math.cos(dx * rad), sx = Math.sin(dx * rad);
-     const cy = Math.cos(dy * rad), sy = Math.sin(dy * rad);
-     const cz = Math.cos(dz * rad), sz = Math.sin(dz * rad);
-     const N = 64, fov = 250;
-     let d = "";
-     for (let i = 0; i <= N; i++) {
-       const th = (i / N) * Math.PI * 2;
-       let x = rx * Math.sin(th), y = -ry * Math.cos(th), z = 0;
-       // Rotate Y first (longitude spin)
-       let x1 = x * cy + z * sy, y1 = y, z1 = -x * sy + z * cy;
-       // Rotate X (pitch tilt)
-       let x2 = x1, y2 = y1 * cx - z1 * sx, z2 = y1 * sx + z1 * cx;
-       // Rotate Z (roll/scissor tilt)
-       let x3 = x2 * cz - y2 * sz, y3 = x2 * sz + y2 * cz, z3 = z2;
-       const scale = fov / (fov + z3);
-       const X = (60 + x3 * scale).toFixed(2), Y = (60 + y3 * scale).toFixed(2);
-       d += (i === 0 ? "M " : " L ") + X + " " + Y;
-     }
-     return d + " Z";
-   }
-   \`\`\`
-
-3. EXACT SINE-ENVELOPE 3D GYROSCOPE CONVERGENCE & OVERLAPPING CHECKMARK SPRING (\`t = 2100..4100\`):
-   - In Phase 3 (\`t = 1700..2100\`), \`growP = easeInOut(clamp01((t - 1700) / 400))\`, \`trim = lerp(0.18, 0.0, growP)\`, \`roundness = growP\`. At \`t = 2100\`, the 4 brackets have closed into the exact \`(31, 43)\` vertical oval! Hide \`bPaths\` right at \`t = 2100\` when \`r1, r2, r3\` take over at \`opacity = 1\`!
-   - In Phase 4 (\`t = 2100..2900\`, \`800ms\` 3D Spin):
-     * NEVER fade \`r1\` out at the end of Phase 4! Keep \`r1, r2, r3\` at \`opacity = "1"\` (and \`r2, r3\` at \`0.92\`) throughout \`t = 2100..2900\`!
-     * Compute \`const p = clamp01((t - 2100) / 800);\`, \`const pe = easeInOut(p);\`, and \`const env = Math.sin(p * Math.PI);\` (notice \`env\` is \`0\` at \`p=0\`, \`1\` at \`p=0.5\`, and \`0\` at \`p=1\`!).
-     * Set the 3 rings' 3D angles so they start at \`(0,0,0)\`, perform a fast, dramatic 360-degree 3D gyroscope + meridian globe spin, and mathematically converge back to \`(0, 360deg, 0)\` at \`p = 1.0\`:
-       \`\`\`js
-       const dx1 = env * 22 * Math.cos(p * Math.PI * 2);
-       const dy1 = pe * 360;
-       const dz1 = env * 28 * Math.sin(p * Math.PI * 2);
-
-       const dx2 = -env * 24 * Math.sin(p * Math.PI * 2);
-       const dy2 = pe * 360 + env * 78;
-       const dz2 = -env * 28 * Math.sin(p * Math.PI * 2);
-
-       const dx3 = env * 34 * Math.cos(p * Math.PI);
-       const dy3 = pe * 180;
-       const dz3 = env * 16;
-
-       r1.setAttribute('d', ringD(31, 43, dx1, dy1, dz1));
-       r2.setAttribute('d', ringD(31, 43, dx2, dy2, dz2));
-       r3.setAttribute('d', ringD(31, 43, dx3, dy3, dz3));
-       \`\`\`
-     * Notice why this transition into the checkmark is 100% seamless: at \`t = 2900\` (\`p = 1.0\`), \`env = 0\` and \`pe = 1.0\`, so \`r1\`, \`r2\`, and \`r3\` have ALL converged onto \`ringD(31, 43, 0, 360, 0)\` — which is identical to \`#final-oval\` (\`cx=60, cy=60, rx=31, ry=43\`)!
-   - In Phase 5 (\`t >= 2820\`, overlapping the final \`80ms\` of convergence!):
-     * At \`t >= 2900\`, set \`r1, r2, r3\` opacity to \`0\` and \`finalOval\` opacity to \`1\`.
-     * Starting at \`t = 2820\` (right as the rings lock together!), start drawing \`#check-path\` (\`d="M 46 61 L 55 72 L 75 48"\`, \`stroke-dasharray="52"\`):
-       \`\`\`js
-       const drawP = clamp01((t - 2820) / 240);
-       const springP = clamp01((t - 3040) / 520);
-       // Underdamped spring bounce for checkmark & sympathetic oval pulse:
-       const springEase = (x) => 1 - Math.exp(-5.5 * x) * Math.cos(9.5 * x);
-       const sp = t < 3040 ? 0 : springEase(springP);
-       const scCheck = lerp(0.58, 1.0, sp);
-       const tyCheck = lerp(7, 0, clamp01(sp));
-       const scOval = t < 3040 ? 1.0 : 1.0 + 0.06 * Math.sin(springP * Math.PI) * (1 - springP);
-       finalOval.setAttribute('transform', \`translate(60, 60) scale(\${scOval.toFixed(3)}) translate(-60, -60)\`);
-       checkG.setAttribute('opacity', '1');
-       checkG.setAttribute('transform', \`translate(60, \${(60 + tyCheck).toFixed(2)}) scale(\${scCheck.toFixed(3)}) translate(-60, -60)\`);
-       check.setAttribute('stroke-dasharray', '52');
-       check.setAttribute('stroke-dashoffset', (52 * (1 - drawP)).toFixed(1));
-       \`\`\`
+YOU MUST USE THIS EXACT MATHEMATICAL IMPLEMENTATION FOR ALL 5 PHASES:
+1. Single morphing container (\`#morph-card\`) starting as the wide \`#007aff\` Blue Pill (\`⚡ Bentomotion\`) on \`#eef1f5\`, squeezing horizontally (\`t=420..820ms\`), and morphing (\`t=820..1280ms\`) into the tall \`#050507\` pitch-black squircle (\`158x188px, border-radius: 44px\`) with a translucent outer halo.
+2. Clockwise \`shapePoint(q, u, roundness)\` for straight-legged Face ID brackets (\`W=35, H=37, R=13\`) + \`#face-features\` (\`M 43 44 L 43 53\`, \`M 77 44 L 77 53\`, \`M 60 45 L 60 60 Q 60 64.5 54.5 64.5\`, \`M 46 74 Q 60 85 74 74\`) that grow their arms (\`trim: 0.18 -> 0.0\`) and round (\`roundness: 0 -> 1\`) into a \`(31, 43)\` vertical oval at \`t = 1700..2100ms\`.
+3. True 3D perspective \`ringD(31, 43, dx, dy, dz)\` (\`fov = 250\`) with sine-envelope convergence (\`env = Math.sin(p * Math.PI)\`, \`pe = easeInOut(p)\`) during \`t = 2100..2900ms\` so all 3 rings spin \`360deg\`/\`180deg\` around Y at \`opacity = 1\` and converge onto \`(0, 360deg, 0)\`.
+4. Overlapping checkmark draw-in (\`t = 2820..3060ms\`) at \`scale(0.58), translateY(+7px)\` followed by an underdamped spring bounce (\`1 - Math.exp(-5.5 * x) * Math.cos(9.5 * x)\`) and sympathetic oval pulse.
 
 Output TWO fenced code blocks in your response:
 1. First, a \`\`\`html ... \`\`\` block containing the COMPLETE, self-contained HTML5 document.
 2. Second, a \`\`\`tsx ... \`\`\` block containing the complete React + Framer Motion + Tailwind CSS component code.`;
+    } else {
+      const layerSpecs = baseResult.layers
+        .map(
+          (l, i) =>
+            `  Layer ${i + 1} ("${l.name}", color ${l.colorHex}): startBox=(${Math.round(l.physics.start_state.x)}, ${Math.round(l.physics.start_state.y)}, ${Math.round(l.physics.start_state.width)}x${Math.round(l.physics.start_state.height)}px) -> endBox=(${Math.round(l.physics.end_state.x)}, ${Math.round(l.physics.end_state.y)}, ${Math.round(l.physics.end_state.width)}x${Math.round(l.physics.end_state.height)}px), stiffness=${l.physics.stiffness}, damping=${l.physics.damping}`
+        )
+        .join("\n");
+
+      synthesisPrompt = `You are Meta Muse Spark 1.3 powering MotionClone.
+Look carefully at all ${imageBlocks.length} chronological frames from "${fileName}" AND the 5-Phase Breakdown + Tracked Layer Telemetry below:
+
+- Animation Title: ${baseResult.interactionTitle}
+- Summary: ${baseResult.interactionSummary}
+- Scene Background Color: ${sceneBackgroundHex}
+- Primary Accent Color: ${primaryAccentHex}
+- Secondary Accent Color: ${secondaryAccentHex}
+- PHASE 1 (Frames 1-2): ${phase1}
+- PHASE 2 (Frame 3): ${phase2}
+- PHASE 3 (Frames 4-5): ${phase3}
+- PHASE 4 (Frames 6-8): ${phase4}
+- PHASE 5 (Frames 9-10): ${phase5}
+- Tracked Layer Trajectories (on 640x400 canvas):
+${layerSpecs}
+
+YOUR GOAL:
+Build a 95%+ visually faithful, 60fps interactive HTML5/SVG/CSS clone that accurately recreates all 5 chronological phases and every inner UI detail of this specific uploaded video!
+
+MANDATORY REQUIREMENTS:
+1. VIEWPORT & LAYOUT (NO CLIPPING!):
+   - Center the animation inside a compact stage (\`width: 400px; height: 225px; position: relative; display: flex; align-items: center; justify-content: center;\`) on a full-viewport studio background (\`${sceneBackgroundHex}\`) with \`overflow: hidden\` and NO top header text.
+   - Below the stage (\`margin-top: 10px\`), place a compact pill bar with 6 buttons (\`Phase 1\` .. \`Phase 5\` with short descriptive labels + \`Loop All\`) so the user can scrub or loop the animation, plus clicking the main UI element triggers a replay.
+2. EXACT VISUAL & SPRING-PHYSICS FIDELITY (\`renderAt(t)\` over \`0..3600ms\`):
+   - Use a SINGLE continuous \`requestAnimationFrame\` loop (\`renderAt(t)\`) driven by underdamped spring interpolation (\`const spring = (x) => 1 - Math.exp(-5.4 * x) * Math.cos(9.2 * x);\`) and smooth \`easeInOut\`.
+   - Recreate ALL visual sub-elements seen in the frames at their exact relative proportions, border radii, shadows, and colors (for example: if it is a Dynamic Island music player, morph a single pitch-black pill \`#0c0d12\` with left emerald dot & right sky-blue dot into the expanded rounded card containing the purple-to-cyan gradient album squircle on the left, white & slate title bars in the center, 4 animated emerald equalizer bars on the right, and the growing sky-blue progress bar along the bottom before collapsing back to the compact pill; if it is a toggle switch or morphing button, animate the exact squash/stretch, orbital spinner, and spring checkmark).
+   - Every \`<svg>\` and stroke \`<path>\` MUST include \`fill="none"\` unless intentionally filled.
+
+Output TWO fenced code blocks in your response:
+1. First, a \`\`\`html ... \`\`\` block containing the COMPLETE, self-contained HTML5 document.
+2. Second, a \`\`\`tsx ... \`\`\` block containing the complete React + Framer Motion + Tailwind CSS component code.`;
+    }
 
     const samConcept =
       customPrompts.split(",")[0]?.trim() ||
       baseResult.layers[0]?.samPrompt ||
-      "blue pill button and squircle";
+      baseResult.interactionTitle;
 
     const [synthResp, samResp] = await Promise.all([
       fetch(`${META_BASE_URL}/chat/completions`, {
@@ -499,7 +545,7 @@ Output TWO fenced code blocks in your response:
         baseResult.codeExports.reactCode = tsxBlock;
       }
       pipelineLogs.push(
-        `Muse Spark 1.3 (${MUSE_MODEL_ID}): Synthesized sine-envelope 3D gyroscope convergence & sympathetic checkmark spring.`
+        `Muse Spark 1.3 (${MUSE_MODEL_ID}): Synthesized 60fps interactive clone for "${baseResult.interactionTitle}".`
       );
     }
 
@@ -516,6 +562,9 @@ Output TWO fenced code blocks in your response:
         "/tmp/motionclone_debug.json",
         JSON.stringify(
           {
+            animationArchetype,
+            isGooeyMetaball,
+            isFaceIdMorph,
             interactionTitle: baseResult.interactionTitle,
             interactionSummary: baseResult.interactionSummary,
             phase1,

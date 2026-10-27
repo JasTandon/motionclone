@@ -76,11 +76,11 @@ export async function POST(request: Request) {
     // non-blocking
   }
 
-  let durationMs = 1800;
+  let durationMs = 2000;
   if (clientTelemetryJson) {
     try {
       const parsedClient = JSON.parse(clientTelemetryJson);
-      durationMs = parsedClient.durationMs || 1800;
+      durationMs = parsedClient.durationMs || 2000;
       if (Array.isArray(parsedClient.layers) && parsedClient.layers.length > 0) {
         baseResult.layers = parsedClient.layers;
       }
@@ -103,26 +103,31 @@ export async function POST(request: Request) {
 
   try {
     // ============================================================================
-    // STEP 1: Muse Spark 1.3 Chronological Multi-Stage Storyboard & Layer Detection
+    // STEP 1: Muse Spark 1.3 Frame-by-Frame Micro-Choreography & Kinematics (temp=0.1)
     // ============================================================================
     const detectionPrompt = `You are Meta Muse Spark 1.3 powering MotionClone.
 Examine all ${imageBlocks.length} chronological video frames (scaled to 640x400 pixels) from "${fileName}", from Frame 1 (start of video) to Frame ${imageBlocks.length} (end of video).
 
-CRITICAL: Look closely at Frame 1 and Frame 2 first!
-If Frame 1 / Frame 2 starts with a distinct initial UI element (for example, a wide horizontal BLUE PILL BUTTON with "⚡ Bentomotion" at x:140, y:145, width:360, height:110) before morphing into another shape (such as a tall black squircle at x:200, y:58, width:240, height:284), you MUST:
-1. Create a dedicated Layer 1 for that initial element in Frame 1-2 with its EXACT wide horizontal bounding box (e.g. startBox: { "x": 140, "y": 145, "width": 360, "height": 110 }, endBox: { "x": 185, "y": 152, "width": 270, "height": 96 }, startTimePct: 0.0, endTimePct: 0.24, colorHex: "#38bdf8").
-2. Create separate layers for the subsequent morphed container and inner animated graphics with their respective startTimePct and endTimePct windows!
+Perform a high-precision, frame-by-frame micro-choreography breakdown across 5 sequential phases so our compiler can recreate the animation with >90% visual & motion accuracy:
+- Look at Frame 1 & Frame 2: Identify the exact initial UI element (e.g. wide bright-blue pill button with white lightning bolt and "Bentomotion" text on a light off-white background) and how it compresses horizontally with motion blur.
+- Look at Frame 3: Notice how the blue pill morphs into the tall pitch-black squircle with a translucent gray outer expansion halo while the inner graphic (e.g. neon-green Face ID face & 4 brackets) unblurs from soft glow to crisp lines.
+- Look at Frame 4 & Frame 5: Notice how the inner face (eyes, nose, mouth) dims to ~30% opacity while the 4 outer corner brackets lengthen and join into a continuous rounded-square perimeter loop!
+- Look at Frame 6 & Frame 7: Notice how the green loop collapses horizontally into 3 tall vertical interlocking neon-green oval rings tumbling/crossing in 3D space!
+- Look at Frame 8, 9 & 10: Notice how the tumbling vertical ovals converge into 1 crisp glowing vertical oval ring, while a checkmark draws in slightly below center and scales up with a spring overshoot bounce!
 
 Return ONLY valid JSON matching this schema (no markdown commentary):
 {
-  "interactionTitle": "Specific title covering ALL stages from Frame 1 to Frame 10 (e.g. 'Blue Pill Button Morph to Face ID Scan & Checkmark')",
-  "interactionSummary": "Clear 1-2 sentence summary describing Stage 1 (e.g. the blue pill button shrinking/morphing), Stage 2 (the container morph & Face ID scan/3D spin), and Stage 3 (the glowing oval & checkmark bounce)",
-  "stage1Description": "Exact visual & motion description of STAGE 1 (Frames 1-2): the initial UI element (e.g. wide bright-blue pill button with white lightning icon and text), its exact colors, pill dimensions, and how it shrinks/morphs into the next container",
-  "stage2Description": "Exact visual & motion description of STAGE 2 (Frames 3-7): the morphed container (e.g. tall black squircle) and the middle animation (e.g. neon-green Face ID brackets & face scanning, then collapsing into 3D spinning interlocking neon-green ovals)",
-  "stage3Description": "Exact visual & motion description of STAGE 3 (Frames 8-10): the final resolved state (e.g. glowing neon-green vertical oval ring and checkmark drawing in with spring overshoot)",
+  "interactionTitle": "Specific title covering the full animation sequence",
+  "interactionSummary": "Clear 1-2 sentence summary describing all 5 micro-phases from start to finish",
+  "sceneBackgroundHex": "#eef1f5",
+  "phase1_initialAndSqueeze": "Frame 1-2 exact visual & motion details",
+  "phase2_containerMorphAndUnblur": "Frame 3 exact container morph, halo ring, and icon unblur details",
+  "phase3_bracketJoinAndFaceDim": "Frame 4-5 exact inner face dimming and outer bracket lengthening/joining details",
+  "phase4_3dTumblingOvals": "Frame 6-7 exact 3D tumbling vertical interlocking oval rings details",
+  "phase5_ovalLockAndCheckmarkSpring": "Frame 8-10 exact single vertical oval lock and two-stage checkmark draw + spring pop details",
   "layers": [
     {
-      "name": "Stage 1: Blue Pill Button (Initial State)",
+      "name": "Phase 1: Blue Pill Button (Initial & Squeeze)",
       "samPrompt": "blue pill button",
       "colorHex": "#38bdf8",
       "role": "control",
@@ -135,7 +140,7 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
       "staggerMs": 0
     },
     {
-      "name": "Stage 2-3: Morphed Black Squircle Container",
+      "name": "Phase 2-5: Morphed Pitch-Black Squircle",
       "samPrompt": "black rounded squircle container",
       "colorHex": "#a855f7",
       "role": "container",
@@ -148,8 +153,8 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
       "staggerMs": 40
     },
     {
-      "name": "Stage 2: Neon-Green Face ID & 3D Spin Rings",
-      "samPrompt": "green Face ID icon and spinning rings",
+      "name": "Phase 2-4: Neon-Green Face ID & 3D Gyro Ovals",
+      "samPrompt": "green Face ID icon and 3D spinning ovals",
       "colorHex": "#10b981",
       "role": "media",
       "startTimePct": 0.22,
@@ -161,7 +166,7 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
       "staggerMs": 80
     },
     {
-      "name": "Stage 3: Glowing Oval Ring & Checkmark",
+      "name": "Phase 5: Glowing Vertical Oval & Spring Checkmark",
       "samPrompt": "green oval ring with checkmark",
       "colorHex": "#f59e0b",
       "role": "media",
@@ -184,6 +189,7 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
       },
       body: JSON.stringify({
         model: MUSE_MODEL_ID,
+        temperature: 0.1,
         messages: [
           {
             role: "user",
@@ -204,12 +210,17 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
       );
     }
 
-    let stage1Description =
-      "Stage 1: Wide bright-blue pill button ('⚡ Bentomotion') appears first, then compresses horizontally and morphs its outer shape and color into the tall black squircle.";
-    let stage2Description =
-      "Stage 2: Inside the morphed black squircle, the neon-green Face ID glyph (4 corner brackets, eyes, nose, smile) scans, joins its brackets, and collapses into 3D spinning interlocking green ovals.";
-    let stage3Description =
-      "Stage 3: Resolves into a single glowing neon-green vertical oval ring while a bold green checkmark draws in and bounces with spring physics.";
+    let sceneBackgroundHex = "#eef1f5";
+    let phase1 =
+      "Wide bright-blue pill button (#007aff, 240x70px) with white lightning bolt and medium-weight 'Bentomotion' text holds for 0.45s, then squeezes horizontally (172x62px) with horizontal motion blur on the text.";
+    let phase2 =
+      "Blue pill morphs its width, height, border-radius, and color into a tall pitch-black squircle (168x204px, border-radius 48px, #050507) with a transient translucent gray outer halo (box-shadow 0 0 0 8px rgba(0,0,0,0.15)), while the neon-green (#8fff5e) Face ID glyph unblurs from blur(6px) to blur(0px).";
+    let phase3 =
+      "Inside the black squircle, the inner face (2 vertical eyes, J-nose, smile) dims to 25% opacity while the 4 outer corner brackets extend their stroke lengths (stroke-dasharray) and join into a continuous rounded-square perimeter loop.";
+    let phase4 =
+      "The inner face disappears and the green perimeter loop collapses horizontally into 3 tall vertical interlocking neon-green oval ellipses (rx=25, ry=45) tumbling and crossing over each other in 3D space (rotateY and rotateZ) before converging to 0deg.";
+    let phase5 =
+      "The tumbling ovals lock into a single crisp glowing vertical neon-green oval ring (rx=32, ry=45, stroke-width 8), and a bold neon-green checkmark draws in via stroke-dashoffset slightly below center and pops upward/outward with a spring overshoot bounce (scale 0.6 -> 1.18 -> 1.0).";
 
     const detectData = await detectResp.json();
     const rawDetectText: string =
@@ -224,14 +235,23 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
         if (parsed.interactionSummary) {
           baseResult.interactionSummary = parsed.interactionSummary;
         }
-        if (parsed.stage1Description) {
-          stage1Description = parsed.stage1Description;
+        if (parsed.sceneBackgroundHex) {
+          sceneBackgroundHex = parsed.sceneBackgroundHex;
         }
-        if (parsed.stage2Description) {
-          stage2Description = parsed.stage2Description;
+        if (parsed.phase1_initialAndSqueeze) {
+          phase1 = parsed.phase1_initialAndSqueeze;
         }
-        if (parsed.stage3Description) {
-          stage3Description = parsed.stage3Description;
+        if (parsed.phase2_containerMorphAndUnblur) {
+          phase2 = parsed.phase2_containerMorphAndUnblur;
+        }
+        if (parsed.phase3_bracketJoinAndFaceDim) {
+          phase3 = parsed.phase3_bracketJoinAndFaceDim;
+        }
+        if (parsed.phase4_3dTumblingOvals) {
+          phase4 = parsed.phase4_3dTumblingOvals;
+        }
+        if (parsed.phase5_ovalLockAndCheckmarkSpring) {
+          phase5 = parsed.phase5_ovalLockAndCheckmarkSpring;
         }
         if (Array.isArray(parsed.layers) && parsed.layers.length > 0) {
           const palette = ["#38bdf8", "#a855f7", "#10b981", "#f59e0b"];
@@ -287,45 +307,48 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
 
     baseResult.usedLiveMetaApi = true;
     pipelineLogs.push(
-      `Muse Spark 1.3 (${MUSE_MODEL_ID}): Extracted 3-stage storyboard ("${baseResult.interactionTitle}") across ${imageBlocks.length} frames.`
+      `Muse Spark 1.3 (${MUSE_MODEL_ID}): Extracted 5-phase micro-choreography ("${baseResult.interactionTitle}") across ${imageBlocks.length} frames.`
     );
 
     // ============================================================================
-    // STEP 2: Muse Spark 1.3 Clean Multi-Stage Interactive Clone + SAM 3.1
+    // STEP 2: Muse Spark 1.3 High-Precision 5-Phase Visual Clone (temp=0.1) + SAM 3.1
     // ============================================================================
     const synthesisPrompt = `You are Meta Muse Spark 1.3 powering MotionClone.
-Look carefully at all ${imageBlocks.length} chronological frames from "${fileName}" AND the extracted Multi-Stage Storyboard below:
+Look carefully at all ${imageBlocks.length} chronological frames from "${fileName}" AND the 5-Phase Micro-Choreography Breakdown below:
 
 - Animation Title: ${baseResult.interactionTitle}
-- STAGE 1 (Beginning - Frames 1-2): ${stage1Description}
-- STAGE 2 (Middle Morph & Scan - Frames 3-7): ${stage2Description}
-- STAGE 3 (Final Resolution - Frames 8-10): ${stage3Description}
+- Scene Background Color: ${sceneBackgroundHex} (Use a clean soft radial studio backdrop \`radial-gradient(circle at 50% 45%, #f8fafc 0%, #e2e8f0 100%)\` across the entire body so both the bright blue pill AND the pitch-black squircle morph pop with 100% of the contrast of the original video!)
+- PHASE 1 (0.00s - 0.65s | Blue Pill & Squeeze): ${phase1}
+- PHASE 2 (0.65s - 1.15s | Container Morph + Halo + Face ID Unblur): ${phase2}
+- PHASE 3 (1.15s - 1.65s | Inner Face Dims + 4 Brackets Join into Loop): ${phase3}
+- PHASE 4 (1.65s - 2.25s | 3D Tumbling Vertical Interlocking Ovals): ${phase4}
+- PHASE 5 (2.25s - 3.40s | Single Vertical Oval Lock + Two-Stage Checkmark Spring Pop): ${phase5}
 
-CRITICAL REQUIREMENT — THE OUTER CONTAINER MUST START AS STAGE 1 (e.g. THE WIDE BLUE PILL BUTTON) AND MORPH INTO THE BLACK SQUIRCLE!
-Do NOT trap Stage 1 inside a permanently black squircle! Instead, build a single morphing outer element \`#morph-card\` whose CSS width, height, border-radius, background, and box-shadow smoothly morph across the stages using \`transition: all 0.55s cubic-bezier(0.34, 1.56, 0.64, 1)\`:
-
-- When \`stage === 0\` (STAGE 1: Blue Pill Button, 0.0s - 1.1s):
-  * \`#morph-card\` is a WIDE HORIZONTAL BLUE PILL BUTTON: \`width: 235px; height: 68px; border-radius: 999px; background: linear-gradient(180deg, #2ea6ff 0%, #007aff 100%); box-shadow: 0 8px 28px rgba(0, 122, 255, 0.45); border: 1px solid rgba(255,255,255,0.25);\`.
-  * Inside \`#morph-card\`, show the white lightning bolt SVG + bold white text (e.g. "Bentomotion"), and animate a subtle horizontal press/squeeze right before transitioning to Stage 1!
-- When \`stage === 1\` (STAGE 2: Morph to Tall Black Squircle + Green Face ID Scan, 1.1s - 2.3s):
-  * \`#morph-card\` morphs its outer shape and color into the TALL BLACK SQUIRCLE: \`width: 165px; height: 195px; border-radius: 42px; background: #05070b; border: 1px solid rgba(74, 222, 128, 0.25); box-shadow: 0 0 32px rgba(74, 222, 128, 0.18);\`.
-  * Inside \`#morph-card\`, the blue pill label fades out and the neon-green Face ID glyph (4 rounded corner brackets + 2 vertical eyes + J-nose + curved smile) pops in and tilts/scans in 3D!
-- When \`stage === 2\` (STAGE 3: 3D Gyroscope Spin -> Glowing Oval & Checkmark, 2.3s - 3.6s):
-  * \`#morph-card\` remains the tall black squircle (\`165px × 195px\`), while the inner green graphic spins in 3D as interlocking neon-green ovals for 0.45s and then settles into the glowing vertical neon-green oval ring with the bold checkmark drawing in via \`stroke-dasharray\` / \`stroke-dashoffset\` and a spring bounce!
-
-MANDATORY SVG & LAYOUT RULES:
-1. Every \`<svg>\` tag and every stroke element (\`<path>\`, \`<circle>\`, \`<ellipse>\`, \`<rect>\`, \`<polyline>\`) MUST explicitly set \`fill="none"\` (except the solid white lightning bolt in Stage 1 which can use \`fill="currentColor"\`). Never omit \`fill="none"\` on stroke paths!
-2. Set \`html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #050811; display: flex; flex-direction: column; align-items: center; justify-content: center; }\` with a fixed-height stage wrapper (\`height: 205px; display: flex; align-items: center; justify-content: center;\`) so morphing \`#morph-card\` from \`68px\` tall to \`195px\` tall never shifts the bottom buttons or causes a scrollbar!
-3. Below the stage wrapper (\`margin-top: 10px\`), render a compact pill switcher bar with 4 buttons:
-   - \`[▶ Auto-Loop All]\`
-   - \`[1. Blue Pill]\`
-   - \`[2. Face ID Scan]\`
-   - \`[3. Checkmark]\`
-   Clicking \`[1. Blue Pill]\` pauses auto-loop and holds \`stage = 0\` so the user can inspect the Blue Pill button! Clicking \`[2. Face ID Scan]\` holds \`stage = 1\`, clicking \`[3. Checkmark]\` holds \`stage = 2\`, and clicking \`[▶ Auto-Loop All]\` or \`#morph-card\` or receiving \`REPLAY_ANIMATION\` via \`window.addEventListener('message', ...)\` restarts the full \`0 -> 1 -> 2\` auto-loop!
+STRICT HIGH-FIDELITY (>90% MATCH) CHOREOGRAPHY REQUIREMENTS:
+1. FULL-VIEWPORT LIGHT STUDIO BACKDROP (SO THE BLACK SQUIRCLE MORPH IS VISUALLY DRAMATIC):
+   - Set \`html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: radial-gradient(circle at 50% 45%, #f8fafc 0%, #e4e8f0 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, sans-serif; }\`.
+   - Use a fixed-height center stage (\`height: 210px; display: flex; align-items: center; justify-content: center;\`) so morphing the container never shifts the bottom control bar!
+2. EXACT 5-PHASE CONTINUOUS MORPHING TIMELINE ON \`#morph-card\`:
+   - Phase 0 (t = 0.00s): \`#morph-card\` is the wide bright-blue pill (\`width: 236px; height: 68px; border-radius: 999px; background: linear-gradient(180deg, #1d9bf0 0%, #007aff 100%); box-shadow: 0 10px 28px rgba(0, 122, 255, 0.32);\`) with the crisp white lightning bolt SVG and medium-weight (\`font-weight: 500; font-size: 20px; letter-spacing: -0.3px;\`) white "Bentomotion" text.
+   - Phase 1 (t = 0.45s, Squeeze): \`#morph-card\` compresses horizontally (\`width: 174px; height: 62px;\`) while \`#pill-label\` scales horizontally (\`transform: scaleX(0.84); filter: blur(2.5px); opacity: 0.75;\`).
+   - Phase 2 (t = 0.70s, Squircle Morph + Halo + Face ID Unblur): \`#morph-card\` morphs with spring overshoot (\`transition: width 0.48s cubic-bezier(0.34, 1.56, 0.64, 1), height 0.52s cubic-bezier(0.34, 1.56, 0.64, 1), border-radius 0.45s ease, background 0.28s ease\`) into the tall pitch-black squircle (\`width: 164px; height: 196px; border-radius: 46px; background: #050507; box-shadow: 0 0 0 7px rgba(0,0,0,0.14), 0 18px 40px rgba(0,0,0,0.22);\`). After 260ms, the \`7px\` gray outer morph halo smoothly relaxes to \`0 0 0 0px rgba(0,0,0,0), 0 18px 40px rgba(0,0,0,0.24)\`. Simultaneously, the neon-green (\`#8fff5e\`) Face ID glyph (4 rounded corner brackets + 2 vertical eyes + central J-nose + curved smile) fades in from \`opacity: 0; filter: blur(6px); transform: scale(0.84)\` to crisp \`opacity: 1; filter: blur(0px); transform: scale(1)\`.
+   - Phase 3 (t = 1.25s, Face Dim + Bracket Perimeter Join — matches Frame 4!): Inside the Face ID SVG, the inner face group (\`#face-features\`: eyes, nose, smile) dims to \`opacity: 0.25; transform: scale(0.92)\`, while a continuous rounded-square perimeter loop (\`<rect x="24" y="24" width="72" height="72" rx="22" fill="none" stroke="#8fff5e" stroke-width="7" />\`) draws/fades in around the 4 corner brackets so the brackets visually join into a glowing green rounded square!
+   - Phase 4 (t = 1.65s, 3D Tumbling Vertical Interlocking Ovals — matches Frames 5 & 6!): The Face ID layer fades out as \`#gyro-layer\` appears with 3 TALL VERTICAL neon-green ellipses (\`<ellipse cx="60" cy="60" rx="26" ry="44" fill="none" stroke="#8fff5e" stroke-width="7.5" />\`) tumbling and crossing over each other in 3D (\`rotateY\` and \`rotateZ\` from \`-55deg\` / \`+55deg\` / \`rotateX(35deg)\` smoothly converging toward \`0deg\`) with a soft neon glow (\`filter: drop-shadow(0 0 10px rgba(143,255,94,0.6))\`).
+   - Phase 5 (t = 2.20s, Single Vertical Oval Lock + Checkmark Draw & Spring Pop — matches Frames 8 & 9!): \`#gyro-layer\` locks seamlessly into \`#final-layer\`: a single crisp vertical neon-green oval ring (\`<ellipse cx="60" cy="60" rx="30" ry="43" fill="none" stroke="#8fff5e" stroke-width="8" />\`). Inside it, the checkmark (\`<path d="M47 62 L56 73 L75 49" fill="none" stroke="#8fff5e" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />\`) first draws in via \`stroke-dashoffset\` at a slightly smaller scale (\`transform: translateY(4px) scale(0.68)\`) and then pops upward/outward with an underdamped spring bounce (\`scale(1.18) -> scale(1.0)\`)!
+3. MANDATORY SVG RULE:
+   - Every \`<svg>\` and every stroke element (\`<path>\`, \`<rect>\`, \`<ellipse>\`, \`<circle>\`, \`<polyline>\`) MUST explicitly set \`fill="none"\` (except the white lightning bolt icon in the blue pill).
+4. SLEEK BOTTOM STAGE CONTROLLER BAR:
+   - Beneath the stage (\`margin-top: 8px\`), render a dark frosted-glass pill bar (\`background: rgba(15, 23, 42, 0.88); padding: 4px; border-radius: 999px;\`) with 5 compact buttons:
+     * \`▶ Auto-Loop\`
+     * \`1. Blue Pill\`
+     * \`2. Face ID\`
+     * \`3. 3D Spin\`
+     * \`4. Checkmark\`
+   - Clicking any phase button pauses auto-loop and jumps to that exact phase so the user can inspect it; clicking \`▶ Auto-Loop\`, clicking \`#morph-card\`, or receiving \`REPLAY_ANIMATION\` via \`window.addEventListener('message', ...)\` plays the full 5-phase sequence!
 
 Output TWO fenced code blocks in your response:
-1. First, a \`\`\`html ... \`\`\` block containing the COMPLETE, self-contained HTML5 document.
-2. Second, a \`\`\`tsx ... \`\`\` block containing the complete React + Framer Motion + Tailwind CSS component code recreating all 3 stages (Blue Pill -> Black Squircle Face ID Scan -> Glowing Oval Checkmark) with spring physics.`;
+1. First, a \`\`\`html ... \`\`\` block containing the COMPLETE, self-contained HTML5 document implementing all 5 phases with >90% visual accuracy.
+2. Second, a \`\`\`tsx ... \`\`\` block containing the complete React + Framer Motion + Tailwind CSS component code recreating all 5 phases with spring physics.`;
 
     const samConcept =
       customPrompts.split(",")[0]?.trim() ||
@@ -341,6 +364,7 @@ Output TWO fenced code blocks in your response:
         },
         body: JSON.stringify({
           model: MUSE_MODEL_ID,
+          temperature: 0.1,
           messages: [
             {
               role: "user",
@@ -397,7 +421,7 @@ Output TWO fenced code blocks in your response:
         baseResult.codeExports.reactCode = tsxBlock;
       }
       pipelineLogs.push(
-        `Muse Spark 1.3 (${MUSE_MODEL_ID}): Synthesized 3-stage morphing clone (Stage 1 Blue Pill → Stage 2 Face ID Scan → Stage 3 Checkmark).`
+        `Muse Spark 1.3 (${MUSE_MODEL_ID}): Synthesized 5-phase high-precision clone (Pill Squeeze → Squircle Halo Morph → Bracket Loop → 3D Vertical Ovals → Spring Checkmark).`
       );
     }
 
@@ -416,9 +440,11 @@ Output TWO fenced code blocks in your response:
           {
             interactionTitle: baseResult.interactionTitle,
             interactionSummary: baseResult.interactionSummary,
-            stage1Description,
-            stage2Description,
-            stage3Description,
+            phase1,
+            phase2,
+            phase3,
+            phase4,
+            phase5,
             layers: baseResult.layers.map((l) => ({
               name: l.name,
               colorHex: l.colorHex,

@@ -1,4 +1,4 @@
-import { FrameBox, SpringPhysics, TelemetryPoint, TrackedLayer } from "@/types/motion";
+import { FrameBox, TelemetryPoint, TrackedLayer } from "@/types/motion";
 import { springStepScalar } from "./localPhysicsEngine";
 
 export interface ExtractedVideoData {
@@ -132,7 +132,8 @@ export function buildLayerFromBoxTrajectory(
 
 /**
  * Decodes ANY uploaded video File in the browser using an offscreen HTML5 <video> and <canvas>,
- * extracts 6 crisp keyframe screenshots (0%, 20%, 40%, 60%, 80%, 100%) for Muse Spark 1.3 vision analysis.
+ * extracts 10 sequential keyframe screenshots covering both the first half (Part 1) and second half (Part 2)
+ * of the animation for Muse Spark 1.3 vision analysis.
  */
 export async function analyzeVideoFileFramesClient(file: File): Promise<ExtractedVideoData> {
   return new Promise((resolve, reject) => {
@@ -141,16 +142,17 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
     video.src = url;
     video.muted = true;
     video.playsInline = true;
+    video.preload = "auto";
     video.crossOrigin = "anonymous";
 
     const STAGE_W = 640;
     const STAGE_H = 400;
 
-    video.onloadedmetadata = async () => {
+    video.onloadeddata = async () => {
       try {
         const rawDuration =
-          Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 1.5;
-        const durationSec = Math.min(6.0, Math.max(0.4, rawDuration));
+          Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 2.0;
+        const durationSec = Math.min(10.0, Math.max(0.4, rawDuration));
         const numFrames = 60;
         const fps = Number((numFrames / durationSec).toFixed(1));
         const durationMs = Math.round(durationSec * 1000);
@@ -162,34 +164,43 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
         if (!ctx) throw new Error("Canvas 2D context unavailable");
 
         const keyframesDataUrls: string[] = [];
-        // Sample 6 evenly spaced keyframes across the video for Muse Spark 1.3
-        const sampleFractions = [0.0, 0.2, 0.4, 0.6, 0.8, 0.98];
+        // Sample 10 keyframes across the full animation (skipping t=0.00s cover/watermark glitch,
+        // with dense sampling across BOTH the first half [5%-45%] and second half [55%-95%])
+        const sampleFractions = [0.05, 0.12, 0.2, 0.28, 0.36, 0.46, 0.56, 0.68, 0.82, 0.95];
 
         const seekTo = (timeSec: number) =>
           new Promise<void>((resSeek) => {
-            const onSeeked = () => {
-              video.removeEventListener("seeked", onSeeked);
-              resSeek();
-            };
-            video.addEventListener("seeked", onSeeked);
-            video.currentTime = Math.min(
-              Math.max(0, durationSec - 0.01),
-              Math.max(0, timeSec)
+            const target = Math.min(
+              Math.max(0.01, durationSec - 0.02),
+              Math.max(0.01, timeSec)
             );
+            let resolved = false;
+            const finish = () => {
+              if (resolved) return;
+              resolved = true;
+              video.removeEventListener("seeked", onSeeked);
+              // Wait a frame + 40ms so hardware decoder flushes the exact frame into the texture
+              requestAnimationFrame(() => {
+                setTimeout(() => resSeek(), 40);
+              });
+            };
+            const onSeeked = () => finish();
+            video.addEventListener("seeked", onSeeked);
+            video.currentTime = target;
+            setTimeout(finish, 350);
           });
 
         for (const frac of sampleFractions) {
           await seekTo(frac * durationSec);
           ctx.drawImage(video, 0, 0, STAGE_W, STAGE_H);
-          keyframesDataUrls.push(canvas.toDataURL("image/jpeg", 0.85));
+          keyframesDataUrls.push(canvas.toDataURL("image/jpeg", 0.82));
         }
 
-        // Initial default center layers before Muse Spark 1.3 + SAM 3.1 refine them with exact object coordinates
         const defaultLayers: TrackedLayer[] = [
           buildLayerFromBoxTrajectory(
             "layer-1",
-            "Primary Animated Subject",
-            "central animated UI object",
+            "Primary Animated Container",
+            "central animated UI container",
             "#06b6d4",
             "container",
             { x: 185, y: 55, width: 270, height: 280 },
@@ -201,15 +212,15 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
           ),
           buildLayerFromBoxTrajectory(
             "layer-2",
-            "Inner Symbol / Graphic",
-            "inner animated icon or symbol",
+            "Stage 1 Initial Graphic",
+            "first stage animated icon or graphic",
             "#10b981",
             "media",
             { x: 245, y: 120, width: 150, height: 150 },
             { x: 235, y: 110, width: 170, height: 170 },
             410,
             20,
-            35,
+            20,
             durationMs
           ),
         ];

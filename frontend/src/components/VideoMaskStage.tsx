@@ -40,25 +40,51 @@ export default function VideoMaskStage({
   const totalFrames = analysis.layers[0]?.frames.length || 60;
 
   useEffect(() => {
+    const vid = videoRef.current;
+    if (uploadedVideoUrl && vid) {
+      vid.loop = true;
+      vid.playbackRate = slowMo ? 0.35 : 1.0;
+      if (isPlaying) {
+        vid.play().catch(() => {});
+      } else {
+        vid.pause();
+      }
+
+      let rafId = 0;
+      const syncFromVideo = () => {
+        if (vid && Number.isFinite(vid.duration) && vid.duration > 0 && !vid.paused) {
+          const nextFrame = Math.min(
+            totalFrames - 1,
+            Math.max(0, Math.round((vid.currentTime / vid.duration) * (totalFrames - 1)))
+          );
+          setCurrentFrame(nextFrame);
+        }
+        if (isPlaying) {
+          rafId = requestAnimationFrame(syncFromVideo);
+        }
+      };
+      if (isPlaying) {
+        rafId = requestAnimationFrame(syncFromVideo);
+      }
+      return () => cancelAnimationFrame(rafId);
+    }
+
     if (!isPlaying) return;
     const intervalMs = slowMo ? 66 : 22;
     const timer = setInterval(() => {
       setCurrentFrame((prev) => (prev + 1) % totalFrames);
     }, intervalMs);
     return () => clearInterval(timer);
-  }, [isPlaying, slowMo, totalFrames, setCurrentFrame]);
+  }, [isPlaying, slowMo, totalFrames, uploadedVideoUrl, setCurrentFrame]);
 
   useEffect(() => {
     const vid = videoRef.current;
-    if (!vid || !uploadedVideoUrl) return;
+    if (!vid || !uploadedVideoUrl || isPlaying) return;
     const duration = vid.duration;
     if (Number.isFinite(duration) && duration > 0) {
-      const targetTime = (currentFrame / Math.max(1, totalFrames - 1)) * duration;
-      if (Math.abs(vid.currentTime - targetTime) > 0.03) {
-        vid.currentTime = targetTime;
-      }
+      vid.currentTime = (currentFrame / Math.max(1, totalFrames - 1)) * duration;
     }
-  }, [currentFrame, totalFrames, uploadedVideoUrl]);
+  }, [currentFrame, totalFrames, uploadedVideoUrl, isPlaying]);
 
   const toggleLayerVisibility = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();

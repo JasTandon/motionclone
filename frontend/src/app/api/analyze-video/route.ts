@@ -111,9 +111,9 @@ Examine all ${imageBlocks.length} chronological video frames (scaled to 640x400 
 Perform a high-precision, frame-by-frame micro-choreography breakdown across 5 sequential phases:
 - Frame 1 & Frame 2: Wide bright-blue pill button with white lightning bolt and "Bentomotion" text on a light off-white background, compressing horizontally with motion blur.
 - Frame 3: Blue pill morphs into a tall pitch-black squircle with a translucent gray outer expansion halo while the inner neon-green Face ID face & 4 straight-legged L-shaped rounded corner brackets unblur from soft glow to crisp lines.
-- Frame 4 & Frame 5: The inner face (wide-set eyes at x=43 and x=77, J-nose, well-spaced smile) dims to ~28% opacity while the 4 outer L-shaped corner brackets dynamically grow their straight arms to close the 4 side gaps and simultaneously round their corners into an oval!
-- Frame 6, Frame 7 & Frame 8: The connected green loop seamlessly transitions into 3 constant-thickness 3D wireframe oval rings tumbling in 3D space (first tilted +16deg compressed coil, then X-scissored at -28deg/+28deg over a soft green core, then vertical outer oval + inner longitudinal meridian ring + central vertical spine sweeping outward into alignment).
-- Frame 9 & Frame 10: The 3D globe locks into 1 crisp glowing vertical oval ring while a bold neon-green checkmark draws in slightly below center at small scale and springs upward/outward into the centered checkmark!
+- Frame 4 & Frame 5: The inner face (wide-set eyes at x=43 and x=77, J-nose, well-spaced smile) dims to ~28% opacity while the 4 outer L-shaped corner brackets dynamically grow their straight arms to close the 4 side gaps and simultaneously round their corners into a vertical oval!
+- Frame 6, Frame 7 & Frame 8: The connected green oval splits into 3 constant-thickness 3D perspective wireframe oval rings spinning a full 360/180 degrees around Y while scissoring at -28deg/+28deg over a soft green core, and mathematically converging back to (0deg, 360deg, 0deg) with zero fade-out!
+- Frame 9 & Frame 10: Right as the 3 spinning rings converge into the single vertical oval, a bold neon-green checkmark draws in slightly below center at small scale and springs upward/outward with a sympathetic spring pulse on the oval!
 
 Return ONLY valid JSON matching this schema (no markdown commentary):
 {
@@ -123,8 +123,8 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
   "phase1_initialAndSqueeze": "Frame 1-2 exact visual & motion details",
   "phase2_containerMorphAndUnblur": "Frame 3 exact container morph, halo ring, and icon unblur details",
   "phase3_bracketJoinAndFaceDim": "Frame 4-5 exact dynamic bracket arm extension and corner rounding details",
-  "phase4_3dTumblingOvals": "Frame 6-8 exact continuous 3D projected wireframe gyroscope & meridian globe details",
-  "phase5_ovalLockAndCheckmarkSpring": "Frame 9-10 exact single vertical oval lock and two-stage checkmark draw + spring pop details",
+  "phase4_3dTumblingOvals": "Frame 6-8 exact 360-degree 3D perspective wireframe gyroscope & meridian convergence details",
+  "phase5_ovalLockAndCheckmarkSpring": "Frame 9-10 exact overlapping checkmark draw-in + underdamped spring pop details",
   "layers": [
     {
       "name": "Phase 1: Blue Pill Button (Initial & Squeeze)",
@@ -218,9 +218,9 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
     let phase3 =
       "The 4 straight-legged L-shaped Face ID brackets continuously grow their straight arms to close the 4 side gaps (gap: 0.18 -> 0.0) while rounding their corners (roundness: 0.0 -> 1.0) into a pure vertical oval as the inner face dims to 25% and scales down.";
     let phase4 =
-      "Using continuous 60fps 3D mathematical projection (so stroke-width stays a constant 7px even at 90deg edge-on!), 3 wireframe rings spin through: (4A) tilted +16deg compressed coil; (4B) -28deg/+28deg X-scissored gyroscope over a glowing green core; (4C) vertical outer oval + inner longitudinal meridian ring + central vertical spine sweeping outward to lock at 360deg.";
+      "3D Wireframe Gyroscope & Meridian Globe Spin with Sine-Envelope Convergence: All 3 rings start at (0,0,0), spin 360deg/180deg around Y in 3D perspective (fov=260) while scissoring at -28deg/+28deg over a soft green core, and mathematically converge back to (0, 360deg, 0) at p=1.0 with opacity=1 the entire time (never fading to black!).";
     let phase5 =
-      "All 3 rings lock seamlessly into the pure vertical oval (<ellipse cx='60' cy='60' rx='31' ry='43'/>), and the bold checkmark draws in slightly below center at scale(0.62) and springs upward/outward with overshoot bounce (scale 1.18 -> 1.0).";
+      "Overlapping the final 80ms of ring convergence, the small checkmark (scale 0.62, ty +6px) draws in via stroke-dashoffset and then springs upward/outward (scale 0.62 -> 1.18 -> 1.0) while the outer vertical oval does a sympathetic spring pulse (scale 1.0 -> 1.05 -> 1.0).";
 
     const detectData = await detectResp.json();
     const rawDetectText: string =
@@ -311,7 +311,7 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
     );
 
     // ============================================================================
-    // STEP 2: Muse Spark 1.3 Bug-Free Straight-Legged L-Bracket & Pure Oval Engine
+    // STEP 2: Muse Spark 1.3 Exact Sine-Envelope 3D Convergence -> Checkmark Spring
     // ============================================================================
     const synthesisPrompt = `You are Meta Muse Spark 1.3 powering MotionClone.
 Look carefully at all ${imageBlocks.length} chronological frames from "${fileName}" AND the 5-Phase Breakdown below:
@@ -321,67 +321,108 @@ Look carefully at all ${imageBlocks.length} chronological frames from "${fileNam
 - PHASE 1 (Blue Pill & Squeeze): ${phase1}
 - PHASE 2 (Single Container Morph + Halo + Face ID Unblur): ${phase2}
 - PHASE 3 (Straight-Legged L-Brackets Grow & Round into Oval): ${phase3}
-- PHASE 4 (60fps Mathematical 3D Wireframe Gyroscope & Globe Spin): ${phase4}
-- PHASE 5 (Pure Vertical Oval Lock + Two-Stage Checkmark Spring Pop): ${phase5}
+- PHASE 4 (360-Deg 3D Perspective Gyroscope & Meridian Convergence): ${phase4}
+- PHASE 5 (Seamless Oval Lock + Overlapping Checkmark Draw & Sympathetic Spring Pop): ${phase5}
 
-CRITICAL FIXES FOR THE 3 BUGS IN THE PREVIOUS RUN (FOLLOW 100% EXACTLY):
+WHY THE 3D SPIN TO CHECKMARK IN THE PREVIOUS RUN WAS WEAK (AND HOW YOU MUST FIX IT):
+In the previous run:
+1. \`r2\` and \`r3\` only rotated to \`58deg\` and \`78deg\` instead of spinning a full \`360deg\`/\`180deg\` and converging back to \`0deg\`!
+2. Worse, \`ringOp\` faded \`r1, r2, r3\` to \`opacity: 0\` between \`t=2750..2850\` before popping \`finalOval\` in at \`t=2850\`!
+3. \`ringD\` lacked 3D perspective (\`fov / (fov + z3)\`).
 
-1. FIX 1 — TRUE STRAIGHT-LEGGED APPLE FACE ID L-BRACKETS & NO CHORD GLITCH IN \`shapePoint(q, u, roundness)\`:
-   - Previously, \`shapePoint\` mutated \`u = 1 - u\` when \`q === 1\`, which caused a backward chord line across the bottom-right of the oval, and used a superellipse that bent the straight bracket arms into parentheses!
-   - You MUST use this exact, bug-free \`shapePoint(q, u, roundness)\` function (which NEVER mutates \`u\`, draws 100% straight horizontal/vertical bracket arms with a 12px circular 90-degree corner when \`roundness = 0\`, and morphs into a 100% pure clockwise ellipse \`(31 * Math.sin(theta), -43 * Math.cos(theta))\` when \`roundness = 1\`):
+YOU MUST USE THIS EXACT MATHEMATICAL IMPLEMENTATION FOR PHASE 3, PHASE 4, AND PHASE 5:
+
+1. KEEP THE EXACT \`shapePoint(q, u, roundness)\` AND \`#face-features\` FROM THE PREVIOUS RUN (they made the Face ID face look great!):
    \`\`\`js
-   const lerp = (a, b, t) => a + (b - a) * t;
-   const clamp01 = (t) => Math.max(0, Math.min(1, t));
-   const easeInOut = (t) => 0.5 - 0.5 * Math.cos(Math.PI * clamp01(t));
-
    function shapePoint(q, u, roundness) {
-     // q in 0..3 (0: top-right, 1: bottom-right, 2: bottom-left, 3: top-left), u in [0, 1]
-     // Local parameter v in [0, 1] for symmetric quadrant evaluation (NEVER mutate u!)
      const v = (q % 2 === 1) ? (1 - u) : u;
      const W = 35, H = 37, R = 13;
      let bx = 0, by = 0;
-     if (v < 0.35) {
-       bx = lerp(0, W - R, v / 0.35);
-       by = -H; // 100% straight horizontal leg
-     } else if (v <= 0.65) {
+     if (v < 0.35) { bx = lerp(0, W - R, v / 0.35); by = -H; }
+     else if (v <= 0.65) {
        const a = lerp(-Math.PI / 2, 0, (v - 0.35) / 0.30);
-       bx = (W - R) + R * Math.cos(a);
-       by = -(H - R) + R * Math.sin(a); // Exact 90-deg circular corner
-     } else {
-       bx = W; // 100% straight vertical leg
-       by = lerp(-(H - R), 0, (v - 0.65) / 0.35);
-     }
+       bx = (W - R) + R * Math.cos(a); by = -(H - R) + R * Math.sin(a);
+     } else { bx = W; by = lerp(-(H - R), 0, (v - 0.65) / 0.35); }
      let rx = bx, ry = by;
      if (q === 1) { rx = bx; ry = -by; }
      else if (q === 2) { rx = -bx; ry = -by; }
      else if (q === 3) { rx = -bx; ry = by; }
-
-     // Pure clockwise vertical oval starting at top-center (0, -43) for q=0, u=0:
      const theta = (q + u) * (Math.PI / 2);
-     const ox = 31 * Math.sin(theta);
-     const oy = -43 * Math.cos(theta);
+     const ox = 31 * Math.sin(theta), oy = -43 * Math.cos(theta);
      return [lerp(rx, ox, roundness), lerp(ry, oy, roundness)];
    }
    \`\`\`
+   And keep \`#face-features\`:
+   \`<path d="M 43 44 L 43 53" /><path d="M 77 44 L 77 53" /><path d="M 60 45 L 60 60 Q 60 64.5 54.5 64.5" /><path d="M 46 74 Q 60 85 74 74" />\`.
 
-2. FIX 2 — EXACT APPLE FACE ID INNER FACE PROPORTIONS (\`#face-features\`):
-   - Previously, the eyes (\`x=48..72, y=52..60\`), nose (\`y=52..71\`), and smile (\`y=74..81\`) were squished into the center so the nose touched the mouth!
-   - Use these exact, well-spaced Apple Face ID coordinates inside \`<g id="face-features" stroke="#8fff5e" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round" fill="none">\`:
-     * Left Eye (wide-set, upper-middle): \`<path d="M 43 44 L 43 53" />\`
-     * Right Eye (wide-set, upper-middle): \`<path d="M 77 44 L 77 53" />\`
-     * Center J-Nose (starts at eye level y=45, goes to y=60, hooks left to x=54.5, y=64.5): \`<path d="M 60 45 L 60 60 Q 60 64.5 54.5 64.5" />\`
-     * Smiling Mouth (clean 9px gap below the nose!): \`<path d="M 46 74 Q 60 85 74 74" />\`
-   - When scaling \`#face-features\` during Phase 3, use native SVG \`face.setAttribute('transform', \`translate(60, 60) scale(\${sc}) translate(-60, -60)\`)\` instead of CSS \`transform-box: fill-box\`!
+2. USE TRUE 3D PERSPECTIVE IN \`ringD(rx, ry, dx, dy, dz)\`:
+   \`\`\`js
+   function ringD(rx, ry, dx, dy, dz) {
+     const rad = Math.PI / 180;
+     const cx = Math.cos(dx * rad), sx = Math.sin(dx * rad);
+     const cy = Math.cos(dy * rad), sy = Math.sin(dy * rad);
+     const cz = Math.cos(dz * rad), sz = Math.sin(dz * rad);
+     const N = 64, fov = 250;
+     let d = "";
+     for (let i = 0; i <= N; i++) {
+       const th = (i / N) * Math.PI * 2;
+       let x = rx * Math.sin(th), y = -ry * Math.cos(th), z = 0;
+       // Rotate Y first (longitude spin)
+       let x1 = x * cy + z * sy, y1 = y, z1 = -x * sy + z * cy;
+       // Rotate X (pitch tilt)
+       let x2 = x1, y2 = y1 * cx - z1 * sx, z2 = y1 * sx + z1 * cx;
+       // Rotate Z (roll/scissor tilt)
+       let x3 = x2 * cz - y2 * sz, y3 = x2 * sz + y2 * cz, z3 = z2;
+       const scale = fov / (fov + z3);
+       const X = (60 + x3 * scale).toFixed(2), Y = (60 + y3 * scale).toFixed(2);
+       d += (i === 0 ? "M " : " L ") + X + " " + Y;
+     }
+     return d + " Z";
+   }
+   \`\`\`
 
-3. FIX 3 — GUARANTEED PURE VERTICAL OVAL & BOLD CHECKMARK IN PHASE 5 (\`t >= 2850ms\`):
-   - Include a dedicated \`<ellipse id="final-oval" cx="60" cy="60" rx="31" ry="43" stroke="#8fff5e" stroke-width="7.5" fill="none" opacity="0" style="filter:drop-shadow(0 0 7px rgba(143,255,94,.85))" />\` and \`<g id="check-group" opacity="0"><path id="check-path" d="M 46 61 L 55 72 L 75 48" stroke="#8fff5e" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none" style="filter:drop-shadow(0 0 7px rgba(143,255,94,.9))" /></g>\`.
-   - When \`t >= 2850\`:
-     * Hide \`r1\`, \`r2\`, \`r3\` (\`opacity="0"\`) and show \`finalOval.setAttribute('opacity', '1')\` so the final oval is a 100% pure native SVG \`<ellipse>\` with zero path seams!
-     * Set \`checkG.setAttribute('opacity', '1')\` and use native SVG \`checkG.setAttribute('transform', \`translate(60, \${60 + ty}) scale(\${sc}) translate(-60, -60)\`)\` + \`check.setAttribute('stroke-dasharray', '52')\` and \`check.setAttribute('stroke-dashoffset', (52 * (1 - drawP)).toFixed(1))\` so the checkmark ALWAYS draws in and springs upward cleanly!
-   - Also, when the user clicks ANY stage button (\`1. Blue Pill\`, \`2. Face ID\`, \`3. 3D Spin\`, \`4. Checkmark\`), instead of freezing on a single static millisecond, loop/play that stage's time window (e.g., clicking \`2. Face ID\` loops \`t = 900..1800\`, clicking \`3. 3D Spin\` loops \`t = 1850..2850\`, clicking \`4. Checkmark\` plays \`t = 2850..4100\` and holds at \`4100\`)!
+3. EXACT SINE-ENVELOPE 3D GYROSCOPE CONVERGENCE & OVERLAPPING CHECKMARK SPRING (\`t = 2100..4100\`):
+   - In Phase 3 (\`t = 1700..2100\`), \`growP = easeInOut(clamp01((t - 1700) / 400))\`, \`trim = lerp(0.18, 0.0, growP)\`, \`roundness = growP\`. At \`t = 2100\`, the 4 brackets have closed into the exact \`(31, 43)\` vertical oval! Hide \`bPaths\` right at \`t = 2100\` when \`r1, r2, r3\` take over at \`opacity = 1\`!
+   - In Phase 4 (\`t = 2100..2900\`, \`800ms\` 3D Spin):
+     * NEVER fade \`r1\` out at the end of Phase 4! Keep \`r1, r2, r3\` at \`opacity = "1"\` (and \`r2, r3\` at \`0.92\`) throughout \`t = 2100..2900\`!
+     * Compute \`const p = clamp01((t - 2100) / 800);\`, \`const pe = easeInOut(p);\`, and \`const env = Math.sin(p * Math.PI);\` (notice \`env\` is \`0\` at \`p=0\`, \`1\` at \`p=0.5\`, and \`0\` at \`p=1\`!).
+     * Set the 3 rings' 3D angles so they start at \`(0,0,0)\`, perform a fast, dramatic 360-degree 3D gyroscope + meridian globe spin, and mathematically converge back to \`(0, 360deg, 0)\` at \`p = 1.0\`:
+       \`\`\`js
+       const dx1 = env * 22 * Math.cos(p * Math.PI * 2);
+       const dy1 = pe * 360;
+       const dz1 = env * 28 * Math.sin(p * Math.PI * 2);
 
-4. COMPACT VIEWPORT SIZING (NO CAPTION TEXT BELOW BUTTONS):
-   - Do NOT add any \`.caption\` div below \`.controls\`! Keep only \`.stage\` (\`height: 200px\`) and \`.controls\` (\`margin-top: 8px\`) centered on \`radial-gradient(circle at 50% 45%, #f8fafc 0%, #e4e8f0 100%)\`.
+       const dx2 = -env * 24 * Math.sin(p * Math.PI * 2);
+       const dy2 = pe * 360 + env * 78;
+       const dz2 = -env * 28 * Math.sin(p * Math.PI * 2);
+
+       const dx3 = env * 34 * Math.cos(p * Math.PI);
+       const dy3 = pe * 180;
+       const dz3 = env * 16;
+
+       r1.setAttribute('d', ringD(31, 43, dx1, dy1, dz1));
+       r2.setAttribute('d', ringD(31, 43, dx2, dy2, dz2));
+       r3.setAttribute('d', ringD(31, 43, dx3, dy3, dz3));
+       \`\`\`
+     * Notice why this transition into the checkmark is 100% seamless: at \`t = 2900\` (\`p = 1.0\`), \`env = 0\` and \`pe = 1.0\`, so \`r1\`, \`r2\`, and \`r3\` have ALL converged onto \`ringD(31, 43, 0, 360, 0)\` — which is identical to \`#final-oval\` (\`cx=60, cy=60, rx=31, ry=43\`)!
+   - In Phase 5 (\`t >= 2820\`, overlapping the final \`80ms\` of convergence!):
+     * At \`t >= 2900\`, set \`r1, r2, r3\` opacity to \`0\` and \`finalOval\` opacity to \`1\`.
+     * Starting at \`t = 2820\` (right as the rings lock together!), start drawing \`#check-path\` (\`d="M 46 61 L 55 72 L 75 48"\`, \`stroke-dasharray="52"\`):
+       \`\`\`js
+       const drawP = clamp01((t - 2820) / 240);
+       const springP = clamp01((t - 3040) / 520);
+       // Underdamped spring bounce for checkmark & sympathetic oval pulse:
+       const springEase = (x) => 1 - Math.exp(-5.5 * x) * Math.cos(9.5 * x);
+       const sp = t < 3040 ? 0 : springEase(springP);
+       const scCheck = lerp(0.58, 1.0, sp);
+       const tyCheck = lerp(7, 0, clamp01(sp));
+       const scOval = t < 3040 ? 1.0 : 1.0 + 0.06 * Math.sin(springP * Math.PI) * (1 - springP);
+       finalOval.setAttribute('transform', \`translate(60, 60) scale(\${scOval.toFixed(3)}) translate(-60, -60)\`);
+       checkG.setAttribute('opacity', '1');
+       checkG.setAttribute('transform', \`translate(60, \${(60 + tyCheck).toFixed(2)}) scale(\${scCheck.toFixed(3)}) translate(-60, -60)\`);
+       check.setAttribute('stroke-dasharray', '52');
+       check.setAttribute('stroke-dashoffset', (52 * (1 - drawP)).toFixed(1));
+       \`\`\`
 
 Output TWO fenced code blocks in your response:
 1. First, a \`\`\`html ... \`\`\` block containing the COMPLETE, self-contained HTML5 document.
@@ -458,7 +499,7 @@ Output TWO fenced code blocks in your response:
         baseResult.codeExports.reactCode = tsxBlock;
       }
       pipelineLogs.push(
-        `Muse Spark 1.3 (${MUSE_MODEL_ID}): Synthesized straight-legged L-bracket Face ID, 60fps 3D globe spin, and native SVG checkmark spring.`
+        `Muse Spark 1.3 (${MUSE_MODEL_ID}): Synthesized sine-envelope 3D gyroscope convergence & sympathetic checkmark spring.`
       );
     }
 

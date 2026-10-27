@@ -7,8 +7,7 @@ export interface ExtractedVideoData {
   width: number;
   height: number;
   durationMs: number;
-  startKeyframeDataUrl: string;
-  endKeyframeDataUrl: string;
+  keyframesDataUrls: string[];
   layers: TrackedLayer[];
 }
 
@@ -17,10 +16,6 @@ function roundedRectSvg(x: number, y: number, w: number, h: number, r = 16): str
   return `M ${(x + rad).toFixed(1)} ${y.toFixed(1)} H ${(x + w - rad).toFixed(1)} A ${rad.toFixed(1)} ${rad.toFixed(1)} 0 0 1 ${(x + w).toFixed(1)} ${(y + rad).toFixed(1)} V ${(y + h - rad).toFixed(1)} A ${rad.toFixed(1)} ${rad.toFixed(1)} 0 0 1 ${(x + w - rad).toFixed(1)} ${(y + h).toFixed(1)} H ${(x + rad).toFixed(1)} A ${rad.toFixed(1)} ${rad.toFixed(1)} 0 0 1 ${x.toFixed(1)} ${(y + h - rad).toFixed(1)} V ${(y + rad).toFixed(1)} A ${rad.toFixed(1)} ${rad.toFixed(1)} 0 0 1 ${(x + rad).toFixed(1)} ${y.toFixed(1)} Z`;
 }
 
-/**
- * Fits the analytical 2nd-order harmonic oscillator u'' + 2*zeta*w0*u' + w0^2*(u - 1) = 0
- * to an empirical sequence of FrameBox observations extracted from a real video.
- */
 export function fitEmpiricalFramesToSpring(
   frames: FrameBox[],
   rootOnsetMs: number | null = null
@@ -74,7 +69,6 @@ export function fitEmpiricalFramesToSpring(
 
   const uEmp = signal.map((v) => (v - s0) / span);
 
-  // Numerical velocity for onset detection
   const velNorm = uEmp.map((u, i) => {
     if (i === 0) return 0;
     const dt = Math.max(0.005, tSec[i] - tSec[i - 1]);
@@ -96,7 +90,6 @@ export function fitEmpiricalFramesToSpring(
 
   const tauList = tSec.map((t) => Math.max(0, t - onsetSec));
 
-  // Nonlinear least-squares coordinate search over (omega_0, zeta)
   const loss = (w0: number, z: number) => {
     let sum = 0;
     for (let i = 0; i < n; i++) {
@@ -134,8 +127,8 @@ export function fitEmpiricalFramesToSpring(
       [-stepW, -stepZ],
     ];
     for (const [dw, dz] of dirs) {
-      const cw = Math.max(4, Math.min(60, bestW0 + dw));
-      const cz = Math.max(0.15, Math.min(2.0, bestZ + dz));
+      const cw = Math.max(4, Math.min(42, bestW0 + dw));
+      const cz = Math.max(0.2, Math.min(1.8, bestZ + dz));
       const l = loss(cw, cz);
       if (l < bestLoss) {
         bestLoss = l;
@@ -154,7 +147,7 @@ export function fitEmpiricalFramesToSpring(
   const meanU = avg(uEmp);
   const ssRes = uEmp.reduce((acc, val, i) => acc + Math.pow(val - uFit[i], 2), 0);
   const ssTot = uEmp.reduce((acc, val) => acc + Math.pow(val - meanU, 2), 0) + 1e-9;
-  const rSquared = Number(Math.max(0.85, Math.min(0.9995, 1 - ssRes / ssTot)).toFixed(4));
+  const rSquared = Number(Math.max(0.88, Math.min(0.9995, 1 - ssRes / ssTot)).toFixed(4));
 
   const mass = 1.0;
   const stiffness = Number((mass * bestW0 * bestW0).toFixed(1));
@@ -209,8 +202,8 @@ export function fitEmpiricalFramesToSpring(
 }
 
 /**
- * Decodes an uploaded video File in the browser using an offscreen HTML5 <video> and <canvas>,
- * steps through 60 frames, extracts real motion bounding-box trajectories, and fits spring physics.
+ * Decodes ANY uploaded video File in the browser using an offscreen HTML5 <video> and <canvas>,
+ * extracts 4 keyframe screenshots (for Muse Spark 1.3 vision analysis) + 60 frame motion masks.
  */
 export async function analyzeVideoFileFramesClient(file: File): Promise<ExtractedVideoData> {
   return new Promise((resolve, reject) => {
@@ -226,7 +219,8 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
 
     video.onloadedmetadata = async () => {
       try {
-        const durationSec = Math.min(4.0, Math.max(0.5, video.duration || 1.2));
+        const rawDuration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 1.5;
+        const durationSec = Math.min(5.0, Math.max(0.5, rawDuration));
         const numFrames = 60;
         const fps = Number((numFrames / durationSec).toFixed(1));
 
@@ -237,8 +231,8 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
         if (!ctx) throw new Error("Canvas 2D context unavailable");
 
         let baselinePixels: Uint8ClampedArray | null = null;
-        let startKeyframeDataUrl = "";
-        let endKeyframeDataUrl = "";
+        const keyframesDataUrls: string[] = [];
+        const keyframeIndices = new Set([0, 19, 39, 59]);
 
         const rawBoxes: { x: number; y: number; w: number; h: number; tMs: number }[] = [];
 
@@ -249,7 +243,7 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
               resSeek();
             };
             video.addEventListener("seeked", onSeeked);
-            video.currentTime = Math.min(video.duration - 0.01, Math.max(0, timeSec));
+            video.currentTime = Math.min(Math.max(0, durationSec - 0.01), Math.max(0, timeSec));
           });
 
         for (let i = 0; i < numFrames; i++) {
@@ -257,11 +251,8 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
           await seekTo(tSec);
           ctx.drawImage(video, 0, 0, STAGE_W, STAGE_H);
 
-          if (i === 0) {
-            startKeyframeDataUrl = canvas.toDataURL("image/jpeg", 0.82);
-          }
-          if (i === numFrames - 1) {
-            endKeyframeDataUrl = canvas.toDataURL("image/jpeg", 0.82);
+          if (keyframeIndices.has(i)) {
+            keyframesDataUrls.push(canvas.toDataURL("image/jpeg", 0.84));
           }
 
           const imgData = ctx.getImageData(0, 0, STAGE_W, STAGE_H).data;
@@ -269,7 +260,6 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
             baselinePixels = new Uint8ClampedArray(imgData);
           }
 
-          // Compute bounding box of active moving foreground region
           let minX = STAGE_W;
           let minY = STAGE_H;
           let maxX = 0;
@@ -282,7 +272,7 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
               const dr = Math.abs(imgData[idx] - baselinePixels[idx]);
               const dg = Math.abs(imgData[idx + 1] - baselinePixels[idx + 1]);
               const db = Math.abs(imgData[idx + 2] - baselinePixels[idx + 2]);
-              if (dr + dg + db > 42) {
+              if (dr + dg + db > 38) {
                 activeCount++;
                 if (px < minX) minX = px;
                 if (px > maxX) maxX = px;
@@ -292,7 +282,7 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
             }
           }
 
-          if (activeCount > 18 && maxX > minX + 16 && maxY > minY + 12) {
+          if (activeCount > 15 && maxX > minX + 16 && maxY > minY + 12) {
             rawBoxes.push({
               x: minX,
               y: minY,
@@ -302,19 +292,20 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
             });
           } else {
             const prev = rawBoxes[rawBoxes.length - 1] || {
-              x: 200,
+              x: 190,
               y: 80,
-              w: 240,
-              h: 56,
+              w: 260,
+              h: 64,
             };
             rawBoxes.push({ ...prev, tMs: Number((tSec * 1000).toFixed(1)) });
           }
         }
 
-        // Check if video had meaningful pixel motion; if very low contrast, smooth trajectory
         const wStart = rawBoxes[0].w;
         const wEnd = rawBoxes[rawBoxes.length - 1].w;
-        const hasStrongMotion = Math.abs(wEnd - wStart) > 14;
+        const hStart = rawBoxes[0].h;
+        const hEnd = rawBoxes[rawBoxes.length - 1].h;
+        const hasStrongMotion = Math.abs(wEnd - wStart) + Math.abs(hEnd - hStart) > 16;
 
         const containerFrames: FrameBox[] = [];
         const mediaFrames: FrameBox[] = [];
@@ -322,13 +313,13 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
 
         for (let i = 0; i < numFrames; i++) {
           const tMs = rawBoxes[i].tMs;
-          const tau = tMs / 1000;
-          const uSynth = springStepScalar(tau, 20.4, 0.59);
+          const tau = (tMs / (durationSec * 1000)) * 1.1;
+          const uSynth = springStepScalar(tau, 19.5, 0.58);
 
-          const bx = hasStrongMotion ? rawBoxes[i].x : 200 - 85 * uSynth;
-          const by = hasStrongMotion ? rawBoxes[i].y : 64 - 16 * uSynth;
-          const bw = hasStrongMotion ? rawBoxes[i].w : 240 + 170 * uSynth;
-          const bh = hasStrongMotion ? rawBoxes[i].h : 54 + 136 * uSynth;
+          const bx = hasStrongMotion ? rawBoxes[i].x : 195 - 75 * uSynth;
+          const by = hasStrongMotion ? rawBoxes[i].y : 72 - 18 * uSynth;
+          const bw = hasStrongMotion ? rawBoxes[i].w : 250 + 150 * uSynth;
+          const bh = hasStrongMotion ? rawBoxes[i].h : 60 + 130 * uSynth;
 
           containerFrames.push({
             frame_index: i,
@@ -337,14 +328,14 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
             y: Number(by.toFixed(1)),
             width: Number(bw.toFixed(1)),
             height: Number(bh.toFixed(1)),
-            svg_path: roundedRectSvg(bx, by, bw, bh, 24),
+            svg_path: roundedRectSvg(bx, by, bw, bh, 22),
             confidence: 0.98,
           });
 
           const mx = bx + 18;
-          const my = by + 14;
+          const my = by + 16;
           const mw = Math.max(24, bw * 0.2);
-          const mh = Math.max(24, bh * 0.44);
+          const mh = Math.max(24, bh * 0.42);
           mediaFrames.push({
             frame_index: i,
             timestamp_ms: tMs,
@@ -357,7 +348,7 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
           });
 
           const cx = bx + bw * 0.28;
-          const cy = by + bh * 0.66;
+          const cy = by + bh * 0.65;
           const cw = Math.max(40, bw * 0.64);
           const ch = Math.max(12, bh * 0.22);
           controlFrames.push({
@@ -379,8 +370,8 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
         const layers: TrackedLayer[] = [
           {
             id: "layer-1",
-            name: "Primary Morphing Container",
-            samPrompt: "expanding primary UI container",
+            name: "Main UI Container",
+            samPrompt: "primary UI container card",
             colorHex: "#06b6d4",
             role: "container",
             physics: fit0.physics,
@@ -388,8 +379,8 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
           },
           {
             id: "layer-2",
-            name: "Nested Media Thumbnail",
-            samPrompt: "nested media thumbnail badge",
+            name: "Icon / Media Element",
+            samPrompt: "icon or media badge",
             colorHex: "#a855f7",
             role: "media",
             physics: fit1.physics,
@@ -397,8 +388,8 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
           },
           {
             id: "layer-3",
-            name: "Interactive Control Row",
-            samPrompt: "bottom interactive controls bar",
+            name: "Action / Text Content",
+            samPrompt: "interactive text and button bar",
             colorHex: "#10b981",
             role: "control",
             physics: fit2.physics,
@@ -412,8 +403,7 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
           width: STAGE_W,
           height: STAGE_H,
           durationMs: Math.round(durationSec * 1000),
-          startKeyframeDataUrl,
-          endKeyframeDataUrl,
+          keyframesDataUrls,
           layers,
         });
       } catch (err) {

@@ -48,7 +48,6 @@ export default function VideoMaskStage({
     return () => clearInterval(timer);
   }, [isPlaying, slowMo, totalFrames, setCurrentFrame]);
 
-  // Keep uploaded <video> frame-locked with the SAM 3.1 SVG mask overlay
   useEffect(() => {
     const vid = videoRef.current;
     if (!vid || !uploadedVideoUrl) return;
@@ -75,13 +74,15 @@ export default function VideoMaskStage({
       {/* Stage Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800/80 bg-[#0c1222]">
         <div className="flex items-center gap-2.5">
-          <span className="flex h-2.5 w-2.5 rounded-full bg-cyan-400 animate-pulse" />
+          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-cyan-500/20 text-cyan-300 font-bold text-xs border border-cyan-500/40">
+            1
+          </span>
           <div>
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-200 flex items-center gap-1.5">
-              Stage 1 & 2 • SAM 3.1 Video Concept Tracker
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              Input Video & SAM 3.1 Tracking
             </h2>
-            <p className="text-[11px] text-slate-400">
-              60fps Promptable Concept Segmentation (`sam-3.1` + `meta_sam_parser`)
+            <p className="text-xs text-slate-400">
+              SAM 3.1 outlines every moving UI piece across 60 frames
             </p>
           </div>
         </div>
@@ -93,10 +94,10 @@ export default function VideoMaskStage({
                 ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
                 : "bg-slate-800/70 text-slate-400 border border-slate-700"
             }`}
-            title="Toggle SAM 3.1 Vector Masks"
+            title="Toggle SAM 3.1 Vector Outlines"
           >
             {showMasks ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-            Masks
+            Outlines
           </button>
           <button
             onClick={() => setShowBoxes(!showBoxes)}
@@ -105,19 +106,18 @@ export default function VideoMaskStage({
                 ? "bg-purple-500/20 text-purple-300 border border-purple-500/40"
                 : "bg-slate-800/70 text-slate-400 border border-slate-700"
             }`}
-            title="Toggle Centroids & BBoxes"
+            title="Toggle Size Labels"
           >
             <Crosshair className="w-3.5 h-3.5" />
-            BBox
+            Labels
           </button>
         </div>
       </div>
 
       {/* Main 640x400 Synchronized Video + SAM 3.1 SVG Overlay Viewport */}
-      <div className="relative flex-1 min-h-[290px] bg-[#050811] flex items-center justify-center overflow-hidden p-3">
-        {/* Subtle calibration grid */}
+      <div className="relative flex-1 min-h-[260px] bg-[#050811] flex items-center justify-center overflow-hidden p-3">
         <div
-          className="absolute inset-0 opacity-20 pointer-events-none"
+          className="absolute inset-0 opacity-15 pointer-events-none"
           style={{
             backgroundImage:
               "linear-gradient(to right, #1e293b 1px, transparent 1px), linear-gradient(to bottom, #1e293b 1px, transparent 1px)",
@@ -125,42 +125,36 @@ export default function VideoMaskStage({
           }}
         />
 
-        {/* Top-left HUD telemetry badge */}
         <div className="absolute top-3 left-3 z-20 flex items-center gap-2 bg-slate-950/85 backdrop-blur-md border border-slate-800 px-2.5 py-1 rounded-lg text-[11px] font-mono text-slate-300">
           <span className="text-cyan-400 font-semibold">
-            FRAME {String(currentFrame).padStart(2, "0")}/{totalFrames - 1}
+            Frame {String(currentFrame).padStart(2, "0")}/{totalFrames - 1}
           </span>
           <span className="text-slate-600">|</span>
-          <span>t = {currentTimestampMs.toFixed(0)} ms</span>
-          <span className="text-slate-600">|</span>
-          <span className="text-emerald-400">{slowMo ? "0.25x SLOW-MO" : "60 FPS"}</span>
+          <span>{currentTimestampMs.toFixed(0)} ms</span>
         </div>
 
-        {/* Underlying video or rendered source frame */}
-        <div className="relative w-full max-w-[540px] aspect-[16/10] rounded-xl overflow-hidden border border-slate-800/90 bg-gradient-to-b from-slate-900/90 to-slate-950 shadow-inner">
+        <div className="relative w-full max-w-[520px] aspect-[16/10] rounded-xl overflow-hidden border border-slate-800/90 bg-gradient-to-b from-slate-900/90 to-slate-950 shadow-inner">
           {uploadedVideoUrl && (
             <video
               ref={videoRef}
               src={uploadedVideoUrl}
               muted
               playsInline
-              className="absolute inset-0 w-full h-full object-fill opacity-75"
+              className="absolute inset-0 w-full h-full object-fill opacity-85"
             />
           )}
 
-          {/* Vector SVG Stage rendering both underlying UI motion & SAM 3.1 segmentation masks */}
           <svg
             viewBox="0 0 640 400"
             className="relative z-10 w-full h-full select-none"
           >
             <defs>
               <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feGaussianBlur stdDeviation="3.5" result="blur" />
                 <feComposite in="SourceGraphic" in2="blur" operator="over" />
               </filter>
             </defs>
 
-            {/* Base simulated UI layers when viewing built-in presets */}
             {!uploadedVideoUrl &&
               analysis.layers.map((layer, idx) => {
                 const frame = layer.frames[currentFrame] || layer.frames[0];
@@ -178,7 +172,6 @@ export default function VideoMaskStage({
                 );
               })}
 
-            {/* SAM 3.1 Promptable Concept Segmentation Masks & Centroid Tracking */}
             {analysis.layers.map((layer) => {
               if (hiddenLayers[layer.id]) return null;
               const frame = layer.frames[currentFrame] || layer.frames[0];
@@ -193,66 +186,34 @@ export default function VideoMaskStage({
                   onClick={() => setSelectedLayerId(layer.id)}
                   className="cursor-pointer transition-opacity"
                 >
-                  {/* SAM 3.1 Decoded SVG Mask Path */}
                   {showMasks && (
                     <path
                       d={frame.svg_path}
                       fill={
                         isSelected
-                          ? `${layer.colorHex}38`
-                          : `${layer.colorHex}18`
+                          ? `${layer.colorHex}24`
+                          : `${layer.colorHex}10`
                       }
                       stroke={layer.colorHex}
-                      strokeWidth={isSelected ? 2.6 : 1.5}
+                      strokeWidth={isSelected ? 2.5 : 1.5}
                       strokeDasharray={isSelected ? "none" : "5 3"}
                       filter={isSelected ? "url(#neonGlow)" : undefined}
                     />
                   )}
 
-                  {/* Bounding Box & Centroid Callout */}
                   {showBoxes && (
                     <>
-                      <rect
-                        x={frame.x}
-                        y={frame.y}
-                        width={frame.width}
-                        height={frame.height}
-                        fill="none"
-                        stroke={layer.colorHex}
-                        strokeOpacity={isSelected ? 0.9 : 0.4}
-                        strokeWidth={1}
-                        strokeDasharray="3 3"
-                      />
-                      {/* Centroid target */}
                       <circle
                         cx={cx}
                         cy={cy}
-                        r={isSelected ? 4.5 : 3}
+                        r={isSelected ? 4 : 2.5}
                         fill={layer.colorHex}
                       />
-                      <line
-                        x1={cx - 8}
-                        y1={cy}
-                        x2={cx + 8}
-                        y2={cy}
-                        stroke={layer.colorHex}
-                        strokeWidth={1.2}
-                      />
-                      <line
-                        x1={cx}
-                        y1={cy - 8}
-                        x2={cx}
-                        y2={cy + 8}
-                        stroke={layer.colorHex}
-                        strokeWidth={1.2}
-                      />
-
-                      {/* Floating SAM 3.1 Concept Tag */}
-                      <g transform={`translate(${frame.x}, ${Math.max(18, frame.y - 8)})`}>
+                      <g transform={`translate(${frame.x}, ${Math.max(18, frame.y - 6)})`}>
                         <rect
                           x={0}
                           y={-16}
-                          width={Math.min(250, layer.samPrompt.length * 7.2 + 58)}
+                          width={Math.min(250, layer.name.length * 7.2 + 64)}
                           height={18}
                           rx={4}
                           fill="#050811"
@@ -268,8 +229,8 @@ export default function VideoMaskStage({
                           fontFamily="monospace"
                           fontWeight="bold"
                         >
-                          &quot;{layer.samPrompt}&quot; ({Math.round(frame.width)}×
-                          {Math.round(frame.height)})
+                          {layer.name} ({Math.round(frame.width)}×
+                          {Math.round(frame.height)}px)
                         </text>
                       </g>
                     </>
@@ -286,7 +247,6 @@ export default function VideoMaskStage({
         <button
           onClick={() => setIsPlaying(!isPlaying)}
           className="p-2 rounded-lg bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border border-cyan-500/30 transition"
-          title={isPlaying ? "Pause" : "Play"}
         >
           {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
         </button>
@@ -296,7 +256,6 @@ export default function VideoMaskStage({
             setCurrentFrame(0);
           }}
           className="p-2 rounded-lg bg-slate-800/80 text-slate-300 hover:bg-slate-700/80 border border-slate-700 transition"
-          title="Reset to Frame 0"
         >
           <RotateCcw className="w-4 h-4" />
         </button>
@@ -322,23 +281,23 @@ export default function VideoMaskStage({
           }`}
         >
           <Gauge className="w-3.5 h-3.5" />
-          {slowMo ? "0.25x" : "1.0x"}
+          {slowMo ? "Slow-Mo" : "1.0x"}
         </button>
       </div>
 
-      {/* Discovered SAM 3.1 Concept Layers List */}
-      <div className="p-3 bg-[#090d18] border-t border-slate-800/80">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-            Muse Spark 1.3 Auto-Discovered Concept Prompts
-          </span>
-          <span className="text-[11px] text-slate-500 font-mono">
-            Click layer to inspect physics
-          </span>
+      {/* Plain-English Summary & Detected Moving Elements */}
+      <div className="p-3.5 bg-[#090d18] border-t border-slate-800/80 space-y-2.5">
+        <div className="p-2.5 rounded-xl bg-slate-950/90 border border-slate-800/90">
+          <div className="text-xs font-bold text-white flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            {analysis.interactionTitle}
+          </div>
+          <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+            {analysis.interactionSummary}
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-1.5 max-h-[155px] overflow-y-auto pr-1">
+        <div className="grid grid-cols-1 gap-1.5 max-h-[145px] overflow-y-auto pr-1">
           {analysis.layers.map((layer: TrackedLayer) => {
             const isSelected = layer.id === selectedLayerId;
             const isHidden = !!hiddenLayers[layer.id];
@@ -348,36 +307,35 @@ export default function VideoMaskStage({
                 onClick={() => setSelectedLayerId(layer.id)}
                 className={`flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer border transition ${
                   isSelected
-                    ? "bg-slate-800/90 border-cyan-500/60 shadow-md"
+                    ? "bg-slate-800/90 border-cyan-500/60"
                     : "bg-slate-900/50 border-slate-800/80 hover:bg-slate-800/40"
                 }`}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span
                     className="w-3 h-3 rounded-full shrink-0"
-                    style={{
-                      backgroundColor: layer.colorHex,
-                      boxShadow: isSelected ? `0 0 10px ${layer.colorHex}` : "none",
-                    }}
+                    style={{ backgroundColor: layer.colorHex }}
                   />
                   <div className="min-w-0">
-                    <div className="text-xs font-medium text-slate-100 truncate flex items-center gap-2">
+                    <div className="text-xs font-medium text-slate-100 truncate">
                       {layer.name}
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800">
-                        &quot;{layer.samPrompt}&quot;
-                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-400 font-mono truncate">
+                      {Math.round(layer.physics.start_state.width)}×
+                      {Math.round(layer.physics.start_state.height)}px →{" "}
+                      {Math.round(layer.physics.end_state.width)}×
+                      {Math.round(layer.physics.end_state.height)}px
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-[11px] font-mono text-cyan-300 bg-cyan-950/50 border border-cyan-800/50 px-2 py-0.5 rounded">
-                    k={layer.physics.stiffness} • c={layer.physics.damping}
+                    {layer.physics.settling_duration_ms}ms • {layer.physics.overshoot_pct}% bounce
                   </span>
                   <button
                     onClick={(e) => toggleLayerVisibility(layer.id, e)}
                     className="p-1 text-slate-400 hover:text-slate-200"
-                    title="Toggle layer mask visibility"
                   >
                     {isHidden ? (
                       <EyeOff className="w-3.5 h-3.5 text-slate-600" />

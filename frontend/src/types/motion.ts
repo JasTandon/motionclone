@@ -69,6 +69,7 @@ export interface AnalysisPayload {
     framesAnalyzed: number;
   };
   layers: TrackedLayer[];
+  livePreviewHtml?: string;
   codeExports: {
     reactCode: string;
     swiftuiCode: string;

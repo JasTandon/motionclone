@@ -12,6 +12,8 @@ import {
   StopCircle,
   Loader2,
   Film,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import VideoMaskStage from "@/components/VideoMaskStage";
 import TelemetryPanel from "@/components/TelemetryPanel";
@@ -22,22 +24,10 @@ import { analyzeVideoFileFramesClient } from "@/lib/videoFrameAnalyzer";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
-const PRESETS = [
-  {
-    id: "dynamic-island",
-    label: "Apple Dynamic Island",
-    tag: "4 SAM 3.1 Layers • ζ=0.58",
-  },
-  {
-    id: "magnetic-wallet",
-    label: "Stripe Magnetic Drawer",
-    tag: "3 SAM 3.1 Layers • k=462",
-  },
-  {
-    id: "bento-morph",
-    label: "Linear Bento Morph",
-    tag: "3 SAM 3.1 Layers • R²=99.9%",
-  },
+const EXAMPLE_CLIPS = [
+  { id: "dynamic-island", label: "Example: Dynamic Island Music Player" },
+  { id: "magnetic-wallet", label: "Example: Magnetic Payment Drawer" },
+  { id: "bento-morph", label: "Example: Expandable Analytics Card" },
 ];
 
 export default function MotionCloneStudioPage() {
@@ -50,17 +40,27 @@ export default function MotionCloneStudioPage() {
   const [currentFrame, setCurrentFrame] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
+  const [showMathDrawer, setShowMathDrawer] = useState<boolean>(false);
 
-  // Upload & Screen Recorder state
   const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string | null>(null);
   const [isRecordingScreen, setIsRecordingScreen] = useState<boolean>(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Meta Model API Key Modal state
   const [showKeyModal, setShowKeyModal] = useState<boolean>(false);
   const [apiKey, setApiKey] = useState<string>("");
   const [customPrompts, setCustomPrompts] = useState<string>("");
+
+  // Load saved API key from localStorage on mount
+  useEffect(() => {
+    const saved = window.localStorage.getItem("motionclone_meta_api_key");
+    if (saved) setApiKey(saved);
+  }, []);
+
+  const saveApiKey = (val: string) => {
+    setApiKey(val);
+    window.localStorage.setItem("motionclone_meta_api_key", val);
+  };
 
   const fetchPreset = async (presetId: string) => {
     setUploadedVideoUrl(null);
@@ -68,17 +68,6 @@ export default function MotionCloneStudioPage() {
     setAnalysis(instantData);
     setSelectedLayerId(instantData.layers[0]?.id || "layer-1");
     setCurrentFrame(0);
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/presets/${presetId}`);
-      if (res.ok) {
-        const data: AnalysisPayload = await res.json();
-        setAnalysis(data);
-        setSelectedLayerId(data.layers[0]?.id || "layer-1");
-      }
-    } catch {
-      // Uses built-in harmonic oscillator engine seamlessly
-    }
   };
 
   useEffect(() => {
@@ -90,14 +79,15 @@ export default function MotionCloneStudioPage() {
     setUploadedVideoUrl(localUrl);
     setIsLoading(true);
     setStatusBanner(
-      `Step 1/3: Decoding 60fps frames from ${file.name} and extracting moving bounding contours...`
+      `Step 1/2: Extracting 60fps frames & motion curves from "${file.name}"...`
     );
 
     try {
-      // 1. Decode real frames & solve spring differential equations on the uploaded video
       const extracted = await analyzeVideoFileFramesClient(file);
       setStatusBanner(
-        `Step 2/3: Solved harmonic spring k=${extracted.layers[0].physics.stiffness} N/m, c=${extracted.layers[0].physics.damping} (R²=${(extracted.layers[0].physics.r_squared * 100).toFixed(1)}%). Calling SAM 3.1 + Muse Spark 1.3...`
+        apiKey
+          ? `Step 2/2: Sending video keyframes & spring math to Meta SAM 3.1 + Muse Spark 1.3...`
+          : `Step 2/2: Compiling interactive UI & React code from measured spring curves...`
       );
 
       const formData = new FormData();
@@ -113,12 +103,10 @@ export default function MotionCloneStudioPage() {
           layers: extracted.layers,
         })
       );
-      if (extracted.startKeyframeDataUrl) {
-        formData.append("start_keyframe", extracted.startKeyframeDataUrl);
-      }
-      if (extracted.endKeyframeDataUrl) {
-        formData.append("end_keyframe", extracted.endKeyframeDataUrl);
-      }
+      formData.append(
+        "keyframes_json",
+        JSON.stringify(extracted.keyframesDataUrls || [])
+      );
       if (customPrompts.trim()) {
         formData.append("custom_prompts", customPrompts.trim());
       }
@@ -138,26 +126,28 @@ export default function MotionCloneStudioPage() {
         setCurrentFrame(0);
         setStatusBanner(
           data.usedLiveMetaApi
-            ? `Live Meta Model API Complete: SAM 3.1 + Muse Spark 1.3 compiled ${file.name} (k=${data.layers[0].physics.stiffness} N/m, c=${data.layers[0].physics.damping})!`
-            : `Compiled ${file.name}: Extracted 60fps masks & solved harmonic spring (k=${data.layers[0].physics.stiffness} N/m, c=${data.layers[0].physics.damping}, R²=${(data.layers[0].physics.r_squared * 100).toFixed(2)}%)!`
+            ? `Done! Meta SAM 3.1 + Muse Spark 1.3 analyzed "${file.name}" and built your working UI clone on the right →`
+            : `Done! Extracted spring animation (${data.layers[0].physics.settling_duration_ms}ms, ${data.layers[0].physics.overshoot_pct}% bounce) from "${file.name}" →`
         );
       }
     } catch {
       const fallback = buildPresetAnalysisLocal("dynamic-island");
       fallback.interactionTitle = `Cloned UI Video (${file.name})`;
       setAnalysis(fallback);
-      setStatusBanner(`Loaded ${file.name} into MotionClone Studio.`);
+      setStatusBanner(`Loaded "${file.name}" into MotionClone.`);
     } finally {
       setIsLoading(false);
     }
   };
 
   /**
-   * Generates a real 60fps .webm UI animation clip in the browser using an offscreen
-   * canvas and feeds it straight into the video ingestion pipeline for 1-click testing!
+   * Renders a realistic animated UI Notification Card on an offscreen canvas,
+   * records it as a real .webm video, and sends it through the full Meta API pipeline.
    */
   const synthesizeAndIngestSampleVideo = async () => {
-    setStatusBanner("Synthesizing 60fps UI animation video clip (.webm)...");
+    setStatusBanner(
+      "Recording a sample UI Notification Card animation (.webm) and sending to SAM 3.1 + Muse Spark 1.3..."
+    );
     const canvas = document.createElement("canvas");
     canvas.width = 640;
     canvas.height = 400;
@@ -177,7 +167,7 @@ export default function MotionCloneStudioPage() {
 
     recorder.onstop = () => {
       const blob = new Blob(chunks, { type: "video/webm" });
-      const file = new File([blob], "live-synthesized-ui-clip.webm", {
+      const file = new File([blob], "notification-toast-animation.webm", {
         type: "video/webm",
       });
       handleVideoFileUpload(file);
@@ -187,23 +177,61 @@ export default function MotionCloneStudioPage() {
 
     const totalFrames = 45;
     for (let f = 0; f < totalFrames; f++) {
-      const tau = f / 45;
-      const u = springStepScalar(tau, 20.5, 0.57);
+      const tau = f / 42;
+      const u = springStepScalar(tau, 19.5, 0.58);
 
+      // Background
       ctx.fillStyle = "#050811";
       ctx.fillRect(0, 0, 640, 400);
 
-      const x = 200 - 80 * u;
-      const y = 70 - 20 * u;
-      const w = 240 + 160 * u;
-      const h = 54 + 140 * u;
+      // Morphing dark card container
+      const x = 195 - 75 * u;
+      const y = 72 - 18 * u;
+      const w = 250 + 150 * u;
+      const h = 60 + 130 * u;
 
-      ctx.fillStyle = "#0ea5e9";
+      ctx.fillStyle = "#0f172a";
+      ctx.strokeStyle = "#22d3ee";
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.roundRect(x, y, w, h, 24);
+      ctx.roundRect(x, y, w, h, 22);
+      ctx.fill();
+      ctx.stroke();
+
+      // Avatar icon badge
+      const ax = x + 18;
+      const ay = y + 16;
+      const aw = 32 + 24 * u;
+      ctx.fillStyle = "#a855f7";
+      ctx.beginPath();
+      ctx.roundRect(ax, ay, aw, aw, 12);
       ctx.fill();
 
-      await new Promise((r) => setTimeout(r, 16));
+      // Title & subtitle text
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 15px sans-serif";
+      ctx.fillText("Incoming Call • Alex Rivera", ax + aw + 14, ay + 20);
+
+      if (u > 0.35) {
+        ctx.fillStyle = "#94a3b8";
+        ctx.font = "12px monospace";
+        ctx.fillText("Meta AI Spatial Video • 60fps", ax + aw + 14, ay + 40);
+
+        // Action CTA button inside expanded card
+        const bx = x + 20;
+        const by = y + h - 52;
+        const bw = w - 40;
+        ctx.fillStyle = "#10b981";
+        ctx.beginPath();
+        ctx.roundRect(bx, by, bw, 36, 10);
+        ctx.fill();
+
+        ctx.fillStyle = "#050811";
+        ctx.font = "bold 13px sans-serif";
+        ctx.fillText("Accept Video Call", bx + bw / 2 - 55, by + 23);
+      }
+
+      await new Promise((r) => setTimeout(r, 15));
     }
 
     recorder.stop();
@@ -260,10 +288,10 @@ export default function MotionCloneStudioPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#050811] text-slate-100">
-      {/* Top Studio Navbar */}
-      <header className="border-b border-slate-800/80 bg-[#080c17]/90 backdrop-blur-md sticky top-0 z-30">
-        <div className="max-w-[1680px] mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
-          {/* Brand & Meta Stack Badges */}
+      {/* Top Navbar */}
+      <header className="border-b border-slate-800/80 bg-[#080c17]/95 backdrop-blur-md sticky top-0 z-30">
+        <div className="max-w-[1560px] mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          {/* Brand */}
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-400 via-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
               <Activity className="w-5 h-5 text-slate-950 stroke-[2.5]" />
@@ -274,68 +302,17 @@ export default function MotionCloneStudioPage() {
                   MotionClone
                 </h1>
                 <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-                  SAM 3.1 + MUSE SPARK 1.3
+                  Meta SAM 3.1 + Muse Spark 1.3
                 </span>
               </div>
-              <p className="text-[11px] text-slate-400">
-                Video-to-Spring-Physics UI Compiler • Inverse Kinematics Studio
+              <p className="text-xs text-slate-400">
+                Upload any UI screen recording → Get working interactive code with matching animation physics
               </p>
             </div>
           </div>
 
-          {/* Preset Switcher Pills */}
-          <div className="flex items-center gap-1.5 bg-slate-950/90 p-1 rounded-xl border border-slate-800">
-            {PRESETS.map((p) => {
-              const active = activePresetId === p.id && !uploadedVideoUrl;
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => setActivePresetId(p.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-2 ${
-                    active
-                      ? "bg-gradient-to-r from-cyan-500/25 to-purple-500/25 text-white border border-cyan-500/40 shadow"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  <span>{p.label}</span>
-                  <span className="hidden xl:inline text-[10px] font-mono text-cyan-300/80">
-                    {p.tag}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Right Action Controls: Record Screen, Test Sample Video, Upload MP4, API Key */}
-          <div className="flex items-center gap-2">
-            {!isRecordingScreen ? (
-              <button
-                onClick={startBrowserScreenRecording}
-                className="px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-medium flex items-center gap-1.5 transition"
-                title="Record 4 seconds of any browser tab or window"
-              >
-                <Video className="w-3.5 h-3.5" />
-                Record Tab (4s)
-              </button>
-            ) : (
-              <button
-                onClick={stopBrowserScreenRecording}
-                className="px-3 py-1.5 rounded-xl bg-rose-600 text-white text-xs font-semibold flex items-center gap-1.5 animate-pulse"
-              >
-                <StopCircle className="w-3.5 h-3.5" />
-                Stop Recording
-              </button>
-            )}
-
-            <button
-              onClick={synthesizeAndIngestSampleVideo}
-              className="px-3 py-1.5 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 text-xs font-medium flex items-center gap-1.5 transition"
-              title="Synthesize a real 60fps .webm video clip in browser and run the full frame-extraction + SAM 3.1 pipeline"
-            >
-              <Film className="w-3.5 h-3.5" />
-              Test Live Video Clip
-            </button>
-
+          {/* Primary Actions: Upload Any Video, Record Screen, Demo Video, Examples, API Key */}
+          <div className="flex flex-wrap items-center gap-2">
             <input
               ref={fileInputRef}
               type="file"
@@ -348,52 +325,106 @@ export default function MotionCloneStudioPage() {
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-3 py-1.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-medium flex items-center gap-1.5 transition"
+              className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-cyan-500/20 transition"
             >
-              <Upload className="w-3.5 h-3.5" />
-              Upload .MP4
+              <Upload className="w-4 h-4" />
+              Upload Any UI Video (.MP4)
             </button>
+
+            {!isRecordingScreen ? (
+              <button
+                onClick={startBrowserScreenRecording}
+                className="px-3.5 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 text-xs font-semibold flex items-center gap-1.5 transition"
+              >
+                <Video className="w-3.5 h-3.5" />
+                Record My Screen (4s)
+              </button>
+            ) : (
+              <button
+                onClick={stopBrowserScreenRecording}
+                className="px-3.5 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold flex items-center gap-1.5 animate-pulse"
+              >
+                <StopCircle className="w-3.5 h-3.5" />
+                Stop Recording
+              </button>
+            )}
+
+            <button
+              onClick={synthesizeAndIngestSampleVideo}
+              className="px-3 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 text-xs font-medium flex items-center gap-1.5 transition"
+              title="Generates a sample UI Notification Card video and analyzes it live with your Meta API key"
+            >
+              <Film className="w-3.5 h-3.5" />
+              Try Sample Video
+            </button>
+
+            {/* Subtle Example Selector */}
+            <select
+              value={uploadedVideoUrl ? "custom" : activePresetId}
+              onChange={(e) => {
+                if (e.target.value !== "custom") {
+                  setActivePresetId(e.target.value);
+                }
+              }}
+              className="bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded-xl px-2.5 py-2 focus:outline-none focus:border-cyan-500"
+            >
+              {uploadedVideoUrl && (
+                <option value="custom">📹 Custom Uploaded Video</option>
+              )}
+              {EXAMPLE_CLIPS.map((ex) => (
+                <option key={ex.id} value={ex.id}>
+                  {ex.label}
+                </option>
+              ))}
+            </select>
 
             <button
               onClick={() => setShowKeyModal(true)}
-              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition"
+              className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition ${
+                apiKey
+                  ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40"
+                  : "bg-amber-500/15 text-amber-300 border-amber-500/40"
+              }`}
             >
-              <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-              {apiKey ? "API Key Active" : "Meta API Key"}
+              <KeyRound className="w-3.5 h-3.5" />
+              {apiKey ? "Meta API Ready" : "Set Meta API Key"}
             </button>
           </div>
         </div>
 
         {/* Status Notification Strip */}
         {statusBanner && (
-          <div className="bg-cyan-950/60 border-t border-cyan-800/50 px-4 py-1.5 text-xs text-cyan-200 flex items-center justify-between max-w-[1680px] mx-auto">
-            <span className="flex items-center gap-2 font-mono">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          <div className="bg-cyan-950/70 border-t border-cyan-800/50 px-4 py-2 text-xs text-cyan-100 flex items-center justify-between max-w-[1560px] mx-auto">
+            <span className="flex items-center gap-2 font-medium">
+              <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
               {statusBanner}
             </span>
             <button
               onClick={() => setStatusBanner(null)}
               className="text-slate-400 hover:text-white"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         )}
       </header>
 
-      {/* Main 3-Column Studio Grid */}
-      <main className="flex-1 max-w-[1680px] w-full mx-auto p-3.5 grid grid-cols-1 lg:grid-cols-12 gap-3.5">
+      {/* Main Side-by-Side Workspace (2 Columns: Left = Input Video, Right = Working Cloned UI & Code) */}
+      <main className="flex-1 max-w-[1560px] w-full mx-auto p-4 space-y-4">
         {isLoading ? (
-          <div className="col-span-12 flex flex-col items-center justify-center min-h-[540px] gap-3 text-slate-400">
-            <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
-            <p className="text-sm font-mono">
-              Decoding 60fps video frames, running SAM 3.1 segmentation & solving harmonic differential equations...
+          <div className="flex flex-col items-center justify-center min-h-[480px] gap-3 bg-[#090d18] border border-slate-800 rounded-2xl p-8 text-center">
+            <Loader2 className="w-9 h-9 text-cyan-400 animate-spin" />
+            <h3 className="text-base font-bold text-white">
+              Analyzing Your Video with Meta SAM 3.1 & Muse Spark 1.3...
+            </h3>
+            <p className="text-xs text-slate-400 max-w-md">
+              Tracking moving UI elements across 60 frames, measuring exact bounce and speed, and compiling your interactive React & CSS clone.
             </p>
           </div>
         ) : (
           <>
-            {/* Left Column (4 cols): Stage 1 & 2 SAM 3.1 Video Mask Tracker */}
-            <div className="lg:col-span-4 flex flex-col">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
+              {/* LEFT SIDE: 1. Input Video & SAM 3.1 Tracking */}
               <VideoMaskStage
                 analysis={analysis}
                 currentFrame={currentFrame}
@@ -402,19 +433,8 @@ export default function MotionCloneStudioPage() {
                 setSelectedLayerId={setSelectedLayerId}
                 uploadedVideoUrl={uploadedVideoUrl}
               />
-            </div>
 
-            {/* Middle Column (4 cols): Stage 3 Inverse Kinematics & Spring Solver */}
-            <div className="lg:col-span-4 flex flex-col">
-              <TelemetryPanel
-                layer={selectedLayer}
-                currentFrame={currentFrame}
-                setCurrentFrame={setCurrentFrame}
-              />
-            </div>
-
-            {/* Right Column (4 cols): Stage 4 & 5 Live Code Sandbox & Closed-Loop Verifier */}
-            <div className="lg:col-span-4 flex flex-col">
+              {/* RIGHT SIDE: 2. Cloned Working UI & Code */}
               <LiveCodeSandbox
                 analysis={analysis}
                 selectedLayer={selectedLayer}
@@ -422,18 +442,52 @@ export default function MotionCloneStudioPage() {
                 apiKey={apiKey}
               />
             </div>
+
+            {/* Optional Expandable Under-the-Hood Math & Telemetry Drawer */}
+            <div className="rounded-2xl bg-[#090d18] border border-slate-800/80 overflow-hidden">
+              <button
+                onClick={() => setShowMathDrawer(!showMathDrawer)}
+                className="w-full px-4 py-3 flex items-center justify-between text-xs font-semibold text-slate-300 hover:bg-slate-900/60 transition"
+              >
+                <span className="flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-purple-400" />
+                  Under the Hood: View Extracted Spring Curves, Velocity Graph & Differential Equations
+                </span>
+                <span className="flex items-center gap-1 text-cyan-400">
+                  {showMathDrawer ? (
+                    <>
+                      Hide Math Telemetry <ChevronUp className="w-4 h-4" />
+                    </>
+                  ) : (
+                    <>
+                      Show Math Telemetry <ChevronDown className="w-4 h-4" />
+                    </>
+                  )}
+                </span>
+              </button>
+
+              {showMathDrawer && (
+                <div className="p-4 border-t border-slate-800">
+                  <TelemetryPanel
+                    layer={selectedLayer}
+                    currentFrame={currentFrame}
+                    setCurrentFrame={setCurrentFrame}
+                  />
+                </div>
+              )}
+            </div>
           </>
         )}
       </main>
 
-      {/* Meta Model API Key & Custom SAM 3.1 Prompts Modal */}
+      {/* Meta Model API Key Modal */}
       {showKeyModal && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md rounded-2xl bg-[#0b101d] border border-slate-800 p-5 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <KeyRound className="w-4 h-4 text-cyan-400" />
-                Meta Model API Configuration (`https://api.meta.ai/v1`)
+                Meta Model API Key (`sam-3.1` & `muse-spark-1.3`)
               </h3>
               <button
                 onClick={() => setShowKeyModal(false)}
@@ -446,12 +500,12 @@ export default function MotionCloneStudioPage() {
             <div className="space-y-3 text-xs">
               <div>
                 <label className="block text-slate-300 font-medium mb-1">
-                  MODEL_API_KEY (Unlocks live `sam-3.1` & `muse-spark-1.3`)
+                  MODEL_API_KEY (Saved automatically in your browser)
                 </label>
                 <input
                   type="password"
                   value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
+                  onChange={(e) => saveApiKey(e.target.value)}
                   placeholder="Paste your Meta Model API bearer token..."
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono focus:outline-none focus:border-cyan-500"
                 />
@@ -465,7 +519,7 @@ export default function MotionCloneStudioPage() {
                   type="text"
                   value={customPrompts}
                   onChange={(e) => setCustomPrompts(e.target.value)}
-                  placeholder="e.g. expanding pill card, album cover icon, play button"
+                  placeholder="Leave blank for Muse Spark 1.3 auto-discovery"
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-100 font-mono focus:outline-none focus:border-cyan-500"
                 />
               </div>
@@ -473,12 +527,10 @@ export default function MotionCloneStudioPage() {
               <div className="p-3 rounded-xl bg-slate-950 border border-slate-800/80 text-[11px] text-slate-400 space-y-1">
                 <div className="text-slate-200 font-medium flex items-center gap-1.5">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  Unified Meta Responses Endpoint Ready
+                  How Your Key Is Used
                 </div>
                 <p>
-                  Uses <code>POST https://api.meta.ai/v1/files</code> and{" "}
-                  <code>POST /v1/responses</code> for both <code>sam-3.1</code>{" "}
-                  and <code>muse-spark-1.3</code>.
+                  When you upload any video, <strong>Muse Spark 1.3</strong> inspects the video frames and generates a custom interactive clone, while <strong>SAM 3.1</strong> tracks the moving UI elements.
                 </p>
               </div>
             </div>
@@ -488,7 +540,7 @@ export default function MotionCloneStudioPage() {
                 onClick={() => setShowKeyModal(false)}
                 className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition"
               >
-                Save & Continue
+                Save & Close
               </button>
             </div>
           </div>

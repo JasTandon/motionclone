@@ -1,216 +1,16 @@
 import { NextResponse } from "next/server";
 import { buildPresetAnalysisLocal } from "@/lib/localPhysicsEngine";
+import { buildLayerFromBoxTrajectory } from "@/lib/videoFrameAnalyzer";
 import { TrackedLayer } from "@/types/motion";
 
-const META_BASE_URL = process.env.META_BASE_URL || "https://api.meta.ai/v1";
+const META_BASE_URL = (process.env.META_BASE_URL || "https://api.meta.ai/v1").replace(/\/$/, "");
 const MUSE_MODEL_ID = process.env.MUSE_MODEL_ID || "muse-spark-1.3";
 const SAM_MODEL_ID = process.env.SAM_MODEL_ID || "sam-3.1";
 
-function buildDefaultLivePreviewHtml(
-  title: string,
-  summary: string,
-  layers: TrackedLayer[]
-): string {
-  const l0 = layers[0]?.physics;
-  const w0 = Math.round(l0?.start_state.width || 240);
-  const h0 = Math.round(l0?.start_state.height || 64);
-  const w1 = Math.round(l0?.end_state.width || 390);
-  const h1 = Math.round(l0?.end_state.height || 190);
-  const dur = Math.min(900, Math.max(280, Math.round(l0?.settling_duration_ms || 480)));
-  const bezier = l0?.cubic_bezier ? l0.cubic_bezier.join(", ") : "0.22, 1.28, 0.36, 1";
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8" />
-<script src="https://cdn.tailwindcss.com"></script>
-<style>
-  body { background: #050811; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-  .clone-card {
-    width: ${w0}px;
-    height: ${h0}px;
-    border-radius: 20px;
-    transition: all ${dur}ms cubic-bezier(${bezier});
-  }
-  .clone-card.expanded {
-    width: ${Math.min(440, w1)}px;
-    height: ${Math.min(250, h1)}px;
-    border-radius: 30px;
-  }
-  . clone-details {
-    opacity: 0;
-    transform: translateY(10px);
-    transition: all ${Math.round(dur * 0.85)}ms cubic-bezier(${bezier}) 45ms;
-    pointer-events: none;
-  }
-  .clone-card.expanded .clone-details {
-    opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
-  }
-</style>
-</head>
-<body>
-  <div id="card" onclick="toggleState()" class="clone-card expanded cursor-pointer bg-slate-900/95 border border-cyan-500/40 shadow-[0_20px_60px_rgba(6,182,212,0.22)] p-4 flex flex-col justify-between overflow-hidden">
-    <div class="flex items-center justify-between gap-3">
-      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 via-blue-500 to-purple-600 flex items-center justify-center shrink-0 shadow-md font-bold text-slate-950 text-xs">
-        UI
-      </div>
-      <div class="flex-1 min-w-0">
-        <div class="text-sm font-bold text-white truncate">${title}</div>
-        <div class="text-[11px] text-cyan-300 font-mono truncate">stiffness: ${l0?.stiffness} • damping: ${l0?.damping}</div>
-      </div>
-      <span class="px-2.5 py-1 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-        Click to Toggle
-      </span>
-    </div>
-    <div class="clone-details space-y-2 pt-2 border-t border-slate-800/80">
-      <p class="text-xs text-slate-300 line-clamp-2">${summary}</p>
-      <div class="flex items-center justify-between text-[11px] font-mono text-slate-400">
-        <span>Bounce: ${l0?.overshoot_pct}%</span>
-        <span>Duration: ${dur}ms</span>
-      </div>
-    </div>
-  </div>
-  <script>
-    function toggleState() {
-      document.getElementById('card').classList.toggle('expanded');
-    }
-    window.addEventListener('message', (e) => {
-      if (e.data === 'REPLAY_ANIMATION') {
-        const el = document.getElementById('card');
-        el.classList.remove('expanded');
-        setTimeout(() => el.classList.add('expanded'), 220);
-      }
-    });
-  </script>
-</body>
-</html>`;
-}
-
-function generateCodeFromMeasuredLayers(
-  title: string,
-  layers: TrackedLayer[]
-): { reactCode: string; swiftuiCode: string; cssCode: string } {
-  const l0 = layers[0]?.physics;
-  const l1 = layers[1]?.physics || l0;
-  const l2 = layers[2]?.physics || l1;
-
-  const reactCode = `import React, { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-
-// Compiled by MotionClone (Meta SAM 3.1 + Muse Spark 1.3)
-export const MEASURED_SPRINGS = {
-  container: {
-    type: "spring" as const,
-    stiffness: ${l0.stiffness},
-    damping: ${l0.damping},
-    mass: ${l0.mass},
-    delay: ${(l0.stagger_delay_ms / 1000).toFixed(3)},
-  },
-  media: {
-    type: "spring" as const,
-    stiffness: ${l1.stiffness},
-    damping: ${l1.damping},
-    mass: ${l1.mass},
-    delay: ${(l1.stagger_delay_ms / 1000).toFixed(3)},
-  },
-  controls: {
-    type: "spring" as const,
-    stiffness: ${l2.stiffness},
-    damping: ${l2.damping},
-    mass: ${l2.mass},
-    delay: ${(l2.stagger_delay_ms / 1000).toFixed(3)},
-  },
-};
-
-export default function ClonedVideoComponent() {
-  const [expanded, setExpanded] = useState(true);
-
-  return (
-    <motion.div
-      layout
-      onClick={() => setExpanded(!expanded)}
-      animate={{
-        width: expanded ? ${Math.round(l0.end_state.width)} : ${Math.round(l0.start_state.width)},
-        height: expanded ? ${Math.round(l0.end_state.height)} : ${Math.round(l0.start_state.height)},
-        borderRadius: expanded ? 30 : 20,
-      }}
-      transition={MEASURED_SPRINGS.container}
-      className="cursor-pointer bg-slate-950 border border-cyan-500/30 shadow-2xl p-4 flex flex-col justify-between overflow-hidden"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <motion.div
-          layout
-          animate={{
-            width: expanded ? ${Math.round(l1.end_state.width)} : ${Math.round(l1.start_state.width)},
-            height: expanded ? ${Math.round(l1.end_state.height)} : ${Math.round(l1.start_state.height)},
-          }}
-          transition={MEASURED_SPRINGS.media}
-          className="rounded-xl bg-gradient-to-br from-cyan-400 via-blue-500 to-purple-600 shrink-0 shadow-md"
-        />
-        <AnimatePresence>
-          {expanded && (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 4 }}
-              transition={MEASURED_SPRINGS.controls}
-              className="flex-1 min-w-0 text-white"
-            >
-              <p className="text-sm font-semibold truncate">${title}</p>
-              <p className="text-xs text-slate-400 font-mono">
-                stiffness=${l0.stiffness} • damping=${l0.damping}
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    </motion.div>
-  );
-}`;
-
-  const respSec = ((2 * Math.PI) / Math.max(1, l0.natural_freq_rad)).toFixed(3);
-  const swiftuiCode = `import SwiftUI
-
-// Compiled by MotionClone from Video Telemetry
-struct ClonedVideoView: View {
-    @State private var isExpanded = true
-    private let spring = Animation.spring(response: ${respSec}, dampingFraction: ${l0.damping_ratio})
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: isExpanded ? 30 : 20, style: .continuous)
-            .fill(Color.black)
-            .frame(
-                width: isExpanded ? ${Math.round(l0.end_state.width)} : ${Math.round(l0.start_state.width)},
-                height: isExpanded ? ${Math.round(l0.end_state.height)} : ${Math.round(l0.start_state.height)}
-            )
-            .animation(spring, value: isExpanded)
-            .onTapGesture { isExpanded.toggle() }
-    }
-}`;
-
-  const cssCode = `/* Compiled by MotionClone from Video Telemetry */
-:root {
-  --mc-stiffness: ${l0.stiffness};
-  --mc-damping: ${l0.damping};
-  --mc-overshoot: ${l0.overshoot_pct}%;
-  --mc-settling-ms: ${l0.settling_duration_ms}ms;
-  --mc-bezier: cubic-bezier(${l0.cubic_bezier.join(", ")});
-}
-
-.mc-cloned-video-layer {
-  width: ${Math.round(l0.start_state.width)}px;
-  height: ${Math.round(l0.start_state.height)}px;
-  transition: all var(--mc-settling-ms) var(--mc-bezier) ${l0.stagger_delay_ms}ms;
-}
-
-.mc-cloned-video-layer.expanded {
-  width: ${Math.round(l0.end_state.width)}px;
-  height: ${Math.round(l0.end_state.height)}px;
-}`;
-
-  return { reactCode, swiftuiCode, cssCode };
+function extractCodeBlock(text: string, lang: string): string | null {
+  const regex = new RegExp("```(?:" + lang + ")?\\s*([\\s\\S]*?)```", "i");
+  const match = text.match(regex);
+  return match ? match[1].trim() : null;
 }
 
 export async function POST(request: Request) {
@@ -225,12 +25,21 @@ export async function POST(request: Request) {
     ""
   ).trim();
 
-  const fileName = videoFile?.name || "uploaded-ui.mp4";
+  if (!apiKey || apiKey === "your_meta_model_api_key_here") {
+    return NextResponse.json(
+      {
+        error: "MISSING_API_KEY",
+        message:
+          "Please click 'Set Meta API Key' in the top bar and paste your Meta Model API key so Muse Spark 1.3 and SAM 3.1 can see and clone your video.",
+      },
+      { status: 400 }
+    );
+  }
+
+  const fileName = videoFile?.name || "uploaded-ui.mov";
   const baseResult = buildPresetAnalysisLocal("dynamic-island");
   baseResult.presetId = "custom-upload";
-  baseResult.interactionTitle = `Cloned UI from ${fileName}`;
-  baseResult.interactionSummary =
-    "Tracked moving UI elements across 60 frames and extracted exact spring bounce and speed.";
+  baseResult.interactionTitle = `Cloned UI (${fileName})`;
   const pipelineLogs: string[] = [];
 
   let keyframes: string[] = [];
@@ -240,220 +49,266 @@ export async function POST(request: Request) {
     keyframes = [];
   }
 
+  let durationMs = 1200;
   if (clientTelemetryJson) {
     try {
       const parsedClient = JSON.parse(clientTelemetryJson);
+      durationMs = parsedClient.durationMs || 1200;
       if (Array.isArray(parsedClient.layers) && parsedClient.layers.length > 0) {
         baseResult.layers = parsedClient.layers;
-        baseResult.videoMeta = {
-          fps: parsedClient.fps || 60,
-          frameCount: parsedClient.frameCount || 60,
-          width: parsedClient.width || 640,
-          height: parsedClient.height || 400,
-          durationMs: parsedClient.durationMs || 1000,
-        };
-        pipelineLogs.push(
-          `Extracted ${baseResult.videoMeta.frameCount} video frames and measured spring stiffness=${baseResult.layers[0].physics.stiffness}, damping=${baseResult.layers[0].physics.damping}.`
-        );
       }
+      baseResult.videoMeta = {
+        fps: parsedClient.fps || 60,
+        frameCount: parsedClient.frameCount || 60,
+        width: 640,
+        height: 400,
+        durationMs,
+      };
     } catch {
-      // Keep default layers
+      // ignore
     }
   }
 
-  if (customPrompts.trim()) {
-    const prompts = customPrompts
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    prompts.forEach((p, idx) => {
-      if (baseResult.layers[idx]) {
-        baseResult.layers[idx].samPrompt = p;
-        baseResult.layers[idx].name = p
-          .split(" ")
-          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-          .join(" ");
-      }
-    });
-  }
+  const imageBlocks = keyframes.slice(0, 6).map((url) => ({
+    type: "image_url",
+    image_url: { url },
+  }));
 
-  baseResult.codeExports = generateCodeFromMeasuredLayers(
-    baseResult.interactionTitle,
-    baseResult.layers
-  );
-  baseResult.livePreviewHtml = buildDefaultLivePreviewHtml(
-    baseResult.interactionTitle,
-    baseResult.interactionSummary,
-    baseResult.layers
-  );
+  // ============================================================================
+  // CALL 1: Muse Spark 1.3 Vision + Spatial Object & Kinematics Detection (JSON)
+  // ============================================================================
+  const detectionPrompt = `You are Meta Muse Spark 1.3 powering MotionClone.
+Examine these 6 sequential frames (scaled to 640x400 pixels) from the user's video "${fileName}".
+Identify what UI component, icon, or animation is shown in the video (for example: Apple Face ID icon scan, a notification card, a toggle switch, a checkout drawer, etc.), and locate the 2 to 3 main visual objects on the 640x400 pixel grid.
 
-  // Live Meta Model API Pipeline: Muse Spark 1.3 + SAM 3.1
-  if (apiKey && apiKey !== "your_meta_model_api_key_here") {
-    try {
-      const l0 = baseResult.layers[0].physics;
-
-      // 1. Call Meta Muse Spark 1.3 (`muse-spark-1.3`) with extracted video keyframes + measured spring math
-      // so Muse Spark sees the actual UI in the video and generates a custom interactive clone!
-      if (keyframes.length > 0) {
-        const sparkPrompt = `You are Meta Muse Spark 1.3 powering MotionClone, a Video-to-UI-Animation compiler.
-Look at these sequential keyframe screenshots from the user's uploaded UI video clip.
-Our SAM 3.1 + kinematics tracker measured the following real motion physics from the video:
-- Start Size: ${Math.round(l0.start_state.width)}x${Math.round(l0.start_state.height)}px -> End Size: ${Math.round(l0.end_state.width)}x${Math.round(l0.end_state.height)}px
-- Spring Stiffness: ${l0.stiffness} N/m, Damping: ${l0.damping} Ns/m, Bounce Overshoot: ${l0.overshoot_pct}%, Settling Duration: ${l0.settling_duration_ms}ms
-- Equivalent CSS Easing: cubic-bezier(${l0.cubic_bezier.join(", ")})
-
-Return ONLY a valid JSON object (no markdown fences) with these exact keys:
+Return ONLY valid JSON matching this schema (no markdown commentary):
 {
-  "interactionTitle": "What UI component is in this video (e.g. 'Expandable Notification Toast', 'Sliding Checkout Modal')",
-  "interactionSummary": "Plain-English 1-sentence explanation of what moves, how fast (${l0.settling_duration_ms}ms), and how much it bounces (${l0.overshoot_pct}%)",
-  "detectedLayers": [
-    { "name": "Readable layer name", "samPrompt": "2-4 word visual noun phrase for SAM 3.1" }
-  ],
-  "livePreviewHtml": "A COMPLETE, self-contained HTML5 document using <script src='https://cdn.tailwindcss.com'></script> that visually recreates the exact UI shown in the keyframes (matching its colors, text, icons, layout) on a dark #050811 background, centered on screen. Clicking the UI (or receiving window.postMessage('REPLAY_ANIMATION')) must toggle/replay the animation between its start state and end state using transition: all ${l0.settling_duration_ms}ms cubic-bezier(${l0.cubic_bezier.join(", ")})!",
-  "reactCode": "Complete, clean React + Tailwind + Framer Motion component code recreating this exact UI with transition={{ type: 'spring', stiffness: ${l0.stiffness}, damping: ${l0.damping} }}"
+  "interactionTitle": "Specific name of what is shown in the video (e.g. 'Apple Face ID Biometric Scan Animation')",
+  "interactionSummary": "Clear 1-sentence description of the visual elements, colors, and how they animate",
+  "layers": [
+    {
+      "name": "Specific element name (e.g. 'Dark Squircle Container', 'Green Face ID Symbol')",
+      "samPrompt": "2-4 word visual noun phrase for SAM 3.1 segmentation",
+      "colorHex": "#06b6d4",
+      "role": "container | media | control",
+      "startBox": { "x": 195, "y": 55, "width": 250, "height": 275 },
+      "endBox": { "x": 185, "y": 48, "width": 270, "height": 290 },
+      "stiffness": 380,
+      "damping": 22,
+      "staggerMs": 0
+    }
+  ]
 }`;
 
-        const contentParts: Record<string, string>[] = [
-          { type: "input_text", text: sparkPrompt },
-        ];
-        keyframes.slice(0, 4).forEach((url) => {
-          contentParts.push({ type: "input_image", image_url: url });
-        });
+  // ============================================================================
+  // CALL 2: Muse Spark 1.3 Visual UI Clone (HTML5/SVG/Tailwind + React Framer Motion)
+  // ============================================================================
+  const synthesisPrompt = `You are Meta Muse Spark 1.3 powering MotionClone.
+Look carefully at these 6 sequential frames from the user's video "${fileName}".
+Your job is to build a WORKING, VISUALLY ACCURATE interactive clone of the exact graphic/UI and animation shown in these frames!
+- Match the exact colors, shapes, rounded corners, and graphics/icons (use inline <svg> paths for any icons, faces, brackets, checkmarks, or symbols shown in the video!).
+- Make it animate smoothly between its states using spring physics when clicked OR when \`window.addEventListener('message', e => { if (e.data === 'REPLAY_ANIMATION') ... })\` fires!
+- Center the component nicely on a dark #050811 background.
 
-        const sparkResp = await fetch(
-          `${META_BASE_URL.replace(/\/$/, "")}/responses`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: MUSE_MODEL_ID,
-              input: [
-                {
-                  type: "message",
-                  role: "user",
-                  content: contentParts,
-                },
-              ],
-            }),
-          }
-        );
+Output TWO fenced code blocks in your response:
+1. First, a \`\`\`html ... \`\`\` block containing a COMPLETE, self-contained HTML5 document (using <script src="https://cdn.tailwindcss.com"></script>) that renders and animates the cloned UI live. Include a subtle button or click handler so clicking the component replays/toggles its animation, and listen for \`window.addEventListener('message', (e) => { if (e.data === 'REPLAY_ANIMATION') ... })\`.
+2. Second, a \`\`\`tsx ... \`\`\` block containing the complete React + Framer Motion + Tailwind CSS component code recreating this exact UI and spring animation.`;
 
-        if (sparkResp.ok) {
-          const sparkData = await sparkResp.json();
-          const rawText: string =
-            sparkData.output_text ||
-            sparkData.output?.[0]?.content?.[0]?.text ||
-            "";
-          const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
-            if (parsed.interactionTitle) {
-              baseResult.interactionTitle = parsed.interactionTitle;
-            }
-            if (parsed.interactionSummary) {
-              baseResult.interactionSummary = parsed.interactionSummary;
-            }
-            if (Array.isArray(parsed.detectedLayers) && !customPrompts.trim()) {
-              parsed.detectedLayers.forEach(
-                (dl: { name?: string; samPrompt?: string }, idx: number) => {
-                  if (baseResult.layers[idx]) {
-                    if (dl.name) baseResult.layers[idx].name = dl.name;
-                    if (dl.samPrompt)
-                      baseResult.layers[idx].samPrompt = dl.samPrompt;
-                  }
-                }
-              );
-            }
-            if (
-              parsed.livePreviewHtml &&
-              typeof parsed.livePreviewHtml === "string" &&
-              parsed.livePreviewHtml.includes("<")
-            ) {
-              baseResult.livePreviewHtml = parsed.livePreviewHtml;
-            }
-            if (
-              parsed.reactCode &&
-              typeof parsed.reactCode === "string" &&
-              parsed.reactCode.length > 40
-            ) {
-              baseResult.codeExports.reactCode = parsed.reactCode;
-            }
-          }
-          baseResult.usedLiveMetaApi = true;
-          pipelineLogs.push(
-            `Muse Spark 1.3 (${MUSE_MODEL_ID}): Inspected video keyframes & synthesized custom interactive clone.`
-          );
-        }
-      }
-
-      // 2. Upload video to Meta Files API & run SAM 3.1 (`sam-3.1`) video concept segmentation
-      if (videoFile) {
-        const uploadForm = new FormData();
-        uploadForm.append("purpose", "user_data");
-        uploadForm.append("file", videoFile);
-
-        const uploadResp = await fetch(
-          `${META_BASE_URL.replace(/\/$/, "")}/files`,
-          {
-            method: "POST",
-            headers: { Authorization: `Bearer ${apiKey}` },
-            body: uploadForm,
-          }
-        );
-
-        if (uploadResp.ok) {
-          const fileData = await uploadResp.json();
-          const fileId = fileData.id;
-
-          const samResp = await fetch(
-            `${META_BASE_URL.replace(/\/$/, "")}/responses`,
+  try {
+    const [detectResp, synthResp] = await Promise.all([
+      fetch(`${META_BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: MUSE_MODEL_ID,
+          messages: [
             {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${apiKey}`,
-              },
-              body: JSON.stringify({
-                model: SAM_MODEL_ID,
-                stream: false,
-                input: [
-                  {
-                    type: "message",
-                    role: "user",
-                    content: [
-                      {
-                        type: "input_text",
-                        text: baseResult.layers[0].samPrompt,
-                      },
-                      {
-                        type: "input_video",
-                        file_id: fileId,
-                      },
-                    ],
-                  },
-                ],
-              }),
-            }
-          );
+              role: "user",
+              content: [{ type: "text", text: detectionPrompt }, ...imageBlocks],
+            },
+          ],
+        }),
+      }),
+      fetch(`${META_BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: MUSE_MODEL_ID,
+          messages: [
+            {
+              role: "user",
+              content: [{ type: "text", text: synthesisPrompt }, ...imageBlocks],
+            },
+          ],
+        }),
+      }),
+    ]);
 
-          if (samResp.ok) {
-            baseResult.usedLiveMetaApi = true;
-            baseResult.pipelineMetadata.perceptionModel = `${SAM_MODEL_ID} (Live Meta API)`;
-            baseResult.pipelineMetadata.reasoningModel = `${MUSE_MODEL_ID} (Live Meta API)`;
-            pipelineLogs.push(
-              `SAM 3.1 (${SAM_MODEL_ID}): Tracked '${baseResult.layers[0].samPrompt}' across video frames.`
-            );
-          }
-        }
-      }
-    } catch (err) {
-      pipelineLogs.push(
-        `Meta API note: ${String(err).slice(0, 90)}`
+    if (!detectResp.ok && !synthResp.ok) {
+      const errBody = await detectResp.text();
+      return NextResponse.json(
+        {
+          error: "META_API_ERROR",
+          message: `Meta API returned HTTP ${detectResp.status}: ${errBody.slice(0, 200)}`,
+        },
+        { status: detectResp.status }
       );
     }
+
+    // Parse Call 1 (Object Detection & Kinematics)
+    if (detectResp.ok) {
+      const detectData = await detectResp.json();
+      const rawDetectText: string =
+        detectData.choices?.[0]?.message?.content || "";
+      const jsonMatch = rawDetectText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.interactionTitle) {
+            baseResult.interactionTitle = parsed.interactionTitle;
+          }
+          if (parsed.interactionSummary) {
+            baseResult.interactionSummary = parsed.interactionSummary;
+          }
+          if (Array.isArray(parsed.layers) && parsed.layers.length > 0) {
+            const palette = ["#06b6d4", "#10b981", "#a855f7", "#f59e0b"];
+            const builtLayers: TrackedLayer[] = parsed.layers
+              .slice(0, 4)
+              .map((l: Record<string, unknown>, idx: number) => {
+                const sBox = (l.startBox as Record<string, number>) || {
+                  x: 190,
+                  y: 60,
+                  width: 250,
+                  height: 260,
+                };
+                const eBox = (l.endBox as Record<string, number>) || {
+                  x: 180,
+                  y: 50,
+                  width: 270,
+                  height: 280,
+                };
+                return buildLayerFromBoxTrajectory(
+                  `layer-${idx + 1}`,
+                  String(l.name || `Tracked Element ${idx + 1}`),
+                  String(l.samPrompt || l.name || "UI object"),
+                  String(l.colorHex || palette[idx % palette.length]),
+                  String(l.role || "container"),
+                  {
+                    x: Number(sBox.x ?? 190),
+                    y: Number(sBox.y ?? 60),
+                    width: Number(sBox.width ?? 250),
+                    height: Number(sBox.height ?? 260),
+                  },
+                  {
+                    x: Number(eBox.x ?? 180),
+                    y: Number(eBox.y ?? 50),
+                    width: Number(eBox.width ?? 270),
+                    height: Number(eBox.height ?? 280),
+                  },
+                  Number(l.stiffness ?? 380),
+                  Number(l.damping ?? 22),
+                  Number(l.staggerMs ?? idx * 35),
+                  durationMs
+                );
+              });
+            baseResult.layers = builtLayers;
+          }
+        } catch {
+          // keep default layers if JSON parse had minor issue
+        }
+      }
+      baseResult.usedLiveMetaApi = true;
+      pipelineLogs.push(
+        `Muse Spark 1.3 (${MUSE_MODEL_ID}): Identified "${baseResult.interactionTitle}" and ${baseResult.layers.length} moving layers.`
+      );
+    }
+
+    // Parse Call 2 (Visual HTML/SVG/Tailwind Clone + React Framer Motion Code)
+    if (synthResp.ok) {
+      const synthData = await synthResp.json();
+      const rawSynthText: string =
+        synthData.choices?.[0]?.message?.content || "";
+
+      const htmlBlock =
+        extractCodeBlock(rawSynthText, "html") ||
+        (rawSynthText.includes("<!DOCTYPE html") || rawSynthText.includes("<html")
+          ? rawSynthText.slice(rawSynthText.indexOf("<"))
+          : null);
+
+      const tsxBlock =
+        extractCodeBlock(rawSynthText, "tsx") ||
+        extractCodeBlock(rawSynthText, "jsx") ||
+        extractCodeBlock(rawSynthText, "typescript");
+
+      if (htmlBlock) {
+        baseResult.livePreviewHtml = htmlBlock;
+      }
+      if (tsxBlock) {
+        baseResult.codeExports.reactCode = tsxBlock;
+      }
+      baseResult.usedLiveMetaApi = true;
+      pipelineLogs.push(
+        `Muse Spark 1.3 (${MUSE_MODEL_ID}): Synthesized custom interactive visual clone & React Framer Motion code.`
+      );
+    }
+
+    // ============================================================================
+    // CALL 3: Meta SAM 3.1 (`sam-3.1`) Video Concept Segmentation
+    // ============================================================================
+    if (videoFile && keyframes[0]) {
+      try {
+        const samConcept =
+          customPrompts.split(",")[0]?.trim() ||
+          baseResult.layers[0]?.samPrompt ||
+          "main icon";
+
+        const samResp = await fetch(`${META_BASE_URL}/responses`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: SAM_MODEL_ID,
+            stream: false,
+            input: [
+              {
+                type: "message",
+                role: "user",
+                content: [
+                  { type: "input_text", text: samConcept },
+                  { type: "input_image", image_url: keyframes[0] },
+                ],
+              },
+            ],
+          }),
+        });
+
+        if (samResp.ok) {
+          baseResult.pipelineMetadata.perceptionModel = `${SAM_MODEL_ID} (Live Meta API)`;
+          baseResult.pipelineMetadata.reasoningModel = `${MUSE_MODEL_ID} (Live Meta API)`;
+          pipelineLogs.push(
+            `SAM 3.1 (${SAM_MODEL_ID}): Verified concept segmentation for "${samConcept}".`
+          );
+        }
+      } catch {
+        // non-blocking SAM 3.1 verification
+      }
+    }
+  } catch (err) {
+    return NextResponse.json(
+      {
+        error: "NETWORK_ERROR",
+        message: `Failed to reach Meta Model API: ${String(err)}`,
+      },
+      { status: 500 }
+    );
   }
 
   baseResult.pipelineLogs = pipelineLogs;

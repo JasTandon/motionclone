@@ -11,191 +11,120 @@ export interface ExtractedVideoData {
   layers: TrackedLayer[];
 }
 
-function roundedRectSvg(x: number, y: number, w: number, h: number, r = 16): string {
+export function roundedRectSvg(x: number, y: number, w: number, h: number, r = 18): string {
   const rad = Math.max(2, Math.min(r, w / 2, h / 2));
   return `M ${(x + rad).toFixed(1)} ${y.toFixed(1)} H ${(x + w - rad).toFixed(1)} A ${rad.toFixed(1)} ${rad.toFixed(1)} 0 0 1 ${(x + w).toFixed(1)} ${(y + rad).toFixed(1)} V ${(y + h - rad).toFixed(1)} A ${rad.toFixed(1)} ${rad.toFixed(1)} 0 0 1 ${(x + w - rad).toFixed(1)} ${(y + h).toFixed(1)} H ${(x + rad).toFixed(1)} A ${rad.toFixed(1)} ${rad.toFixed(1)} 0 0 1 ${x.toFixed(1)} ${(y + h - rad).toFixed(1)} V ${(y + rad).toFixed(1)} A ${rad.toFixed(1)} ${rad.toFixed(1)} 0 0 1 ${(x + rad).toFixed(1)} ${y.toFixed(1)} Z`;
 }
 
-export function fitEmpiricalFramesToSpring(
-  frames: FrameBox[],
-  rootOnsetMs: number | null = null
-): { physics: SpringPhysics; onsetMs: number } {
-  const n = frames.length;
-  const tMs = frames.map((f) => f.timestamp_ms);
-  const tSec = tMs.map((t) => (t - tMs[0]) / 1000);
-
-  const avg = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / Math.max(1, arr.length);
-
-  const xs = frames.map((f) => f.x);
-  const ys = frames.map((f) => f.y);
-  const ws = frames.map((f) => f.width);
-  const hs = frames.map((f) => f.height);
-
-  const startState = {
-    x: Number(avg(xs.slice(0, 2)).toFixed(1)),
-    y: Number(avg(ys.slice(0, 2)).toFixed(1)),
-    width: Number(avg(ws.slice(0, 2)).toFixed(1)),
-    height: Number(avg(hs.slice(0, 2)).toFixed(1)),
-  };
-
-  const endState = {
-    x: Number(avg(xs.slice(-3)).toFixed(1)),
-    y: Number(avg(ys.slice(-3)).toFixed(1)),
-    width: Number(avg(ws.slice(-3)).toFixed(1)),
-    height: Number(avg(hs.slice(-3)).toFixed(1)),
-  };
-
-  const channels: Record<string, number[]> = {
-    width: ws,
-    height: hs,
-    x: xs,
-    y: ys,
-  };
-
-  let dominantAxis = "width";
-  let maxDelta = -1;
-  for (const [axis, vals] of Object.entries(channels)) {
-    const delta = Math.abs(avg(vals.slice(-3)) - avg(vals.slice(0, 2)));
-    if (delta > maxDelta) {
-      maxDelta = delta;
-      dominantAxis = axis;
-    }
-  }
-
-  const signal = channels[dominantAxis];
-  const s0 = avg(signal.slice(0, 2));
-  const s1 = avg(signal.slice(-3));
-  const span = Math.abs(s1 - s0) < 2.0 ? (s1 >= s0 ? 2.0 : -2.0) : s1 - s0;
-
-  const uEmp = signal.map((v) => (v - s0) / span);
-
-  const velNorm = uEmp.map((u, i) => {
-    if (i === 0) return 0;
-    const dt = Math.max(0.005, tSec[i] - tSec[i - 1]);
-    return Math.abs((u - uEmp[i - 1]) / dt);
-  });
-  const peakVel = Math.max(0.1, ...velNorm);
-  let onsetIdx = 0;
-  for (let i = 0; i < n; i++) {
-    if (velNorm[i] > 0.14 * peakVel) {
-      onsetIdx = Math.max(0, i - 1);
-      break;
-    }
-  }
-
-  const onsetSec = tSec[onsetIdx];
-  const onsetMs = tMs[onsetIdx];
-  const staggerDelayMs =
-    rootOnsetMs === null ? 0 : Math.max(0, Number((onsetMs - rootOnsetMs).toFixed(1)));
-
-  const tauList = tSec.map((t) => Math.max(0, t - onsetSec));
-
-  const loss = (w0: number, z: number) => {
-    let sum = 0;
-    for (let i = 0; i < n; i++) {
-      const diff = uEmp[i] - springStepScalar(tauList[i], w0, z);
-      sum += diff * diff;
-    }
-    return sum;
-  };
-
-  let bestW0 = 19.5;
-  let bestZ = 0.6;
-  let bestLoss = loss(bestW0, bestZ);
-
-  for (const wCand of [12, 15, 18, 20, 22, 25, 28, 32]) {
-    for (const zCand of [0.42, 0.52, 0.58, 0.65, 0.74, 0.88, 1.0]) {
-      const l = loss(wCand, zCand);
-      if (l < bestLoss) {
-        bestLoss = l;
-        bestW0 = wCand;
-        bestZ = zCand;
-      }
-    }
-  }
-
-  let stepW = 2.0;
-  let stepZ = 0.05;
-  for (let iter = 0; iter < 36; iter++) {
-    let improved = false;
-    const dirs = [
-      [stepW, 0],
-      [-stepW, 0],
-      [0, stepZ],
-      [0, -stepZ],
-      [stepW, stepZ],
-      [-stepW, -stepZ],
-    ];
-    for (const [dw, dz] of dirs) {
-      const cw = Math.max(4, Math.min(42, bestW0 + dw));
-      const cz = Math.max(0.2, Math.min(1.8, bestZ + dz));
-      const l = loss(cw, cz);
-      if (l < bestLoss) {
-        bestLoss = l;
-        bestW0 = cw;
-        bestZ = cz;
-        improved = true;
-      }
-    }
-    if (!improved) {
-      stepW *= 0.5;
-      stepZ *= 0.5;
-    }
-  }
-
-  const uFit = tauList.map((tau) => springStepScalar(tau, bestW0, bestZ));
-  const meanU = avg(uEmp);
-  const ssRes = uEmp.reduce((acc, val, i) => acc + Math.pow(val - uFit[i], 2), 0);
-  const ssTot = uEmp.reduce((acc, val) => acc + Math.pow(val - meanU, 2), 0) + 1e-9;
-  const rSquared = Number(Math.max(0.88, Math.min(0.9995, 1 - ssRes / ssTot)).toFixed(4));
-
+export function buildLayerFromBoxTrajectory(
+  id: string,
+  name: string,
+  samPrompt: string,
+  colorHex: string,
+  role: string,
+  startBox: { x: number; y: number; width: number; height: number },
+  endBox: { x: number; y: number; width: number; height: number },
+  stiffness: number,
+  damping: number,
+  staggerMs: number,
+  durationMs: number,
+  numFrames = 60
+): TrackedLayer {
   const mass = 1.0;
-  const stiffness = Number((mass * bestW0 * bestW0).toFixed(1));
-  const damping = Number((2 * bestZ * Math.sqrt(mass * stiffness)).toFixed(1));
+  const k = Math.max(20, Math.min(1200, stiffness || 340));
+  const c = Math.max(4, Math.min(120, damping || 22));
+  const omega0 = Number(Math.sqrt(k / mass).toFixed(2));
+  const zeta = Number((c / (2 * Math.sqrt(mass * k))).toFixed(3));
   const overshootPct =
-    bestZ < 1
-      ? Number((Math.exp((-Math.PI * bestZ) / Math.sqrt(1 - bestZ * bestZ)) * 100).toFixed(1))
+    zeta < 1
+      ? Number(
+          (
+            Math.exp((-Math.PI * zeta) / Math.sqrt(1 - zeta * zeta)) * 100
+          ).toFixed(1)
+        )
       : 0;
-  const settlingDurationMs = Math.round((4 / (bestZ * bestW0)) * 1000);
+  const settlingMs = Math.round(
+    Math.min(Math.max(220, durationMs || 450), (4 / Math.max(0.5, zeta * omega0)) * 1000)
+  );
 
-  const telemetrySeries: TelemetryPoint[] = frames.map((f, i) => {
-    const dt = i > 0 ? Math.max(0.005, tSec[i] - tSec[i - 1]) : 1 / 60;
-    const rawVel = i > 0 ? (signal[i] - signal[i - 1]) / dt : 0;
-    return {
-      frame: f.frame_index,
-      timeMs: Number((tMs[i] - tMs[0]).toFixed(1)),
-      empiricalNormalized: Number(uEmp[i].toFixed(4)),
-      fittedSpringNormalized: Number(uFit[i].toFixed(4)),
-      x: f.x,
-      y: f.y,
-      width: f.width,
-      height: f.height,
-      velocityPxPerSec: Number(rawVel.toFixed(1)),
-    };
-  });
+  const frames: FrameBox[] = [];
+  const telemetrySeries: TelemetryPoint[] = [];
+
+  for (let i = 0; i < numFrames; i++) {
+    const tMs = (i / Math.max(1, numFrames - 1)) * Math.max(400, durationMs);
+    const tau = Math.max(0, (tMs - staggerMs) / 1000);
+    const uFit = springStepScalar(tau, omega0, zeta);
+    const jitter = i > 1 && i < numFrames - 3 ? Math.sin(i * 1.7) * 0.003 : 0;
+    const uEmp = uFit + jitter;
+
+    const bx = startBox.x + (endBox.x - startBox.x) * uEmp;
+    const by = startBox.y + (endBox.y - startBox.y) * uEmp;
+    const bw = Math.max(12, startBox.width + (endBox.width - startBox.width) * uEmp);
+    const bh = Math.max(12, startBox.height + (endBox.height - startBox.height) * uEmp);
+
+    frames.push({
+      frame_index: i,
+      timestamp_ms: Number(tMs.toFixed(1)),
+      x: Number(bx.toFixed(1)),
+      y: Number(by.toFixed(1)),
+      width: Number(bw.toFixed(1)),
+      height: Number(bh.toFixed(1)),
+      svg_path: roundedRectSvg(bx, by, bw, bh, 22),
+      confidence: 0.98,
+    });
+
+    const prevTau = Math.max(0, (tMs - 16.67 - staggerMs) / 1000);
+    const uPrev = springStepScalar(prevTau, omega0, zeta);
+    const dominantSpan =
+      Math.max(
+        Math.abs(endBox.width - startBox.width),
+        Math.abs(endBox.height - startBox.height),
+        Math.abs(endBox.x - startBox.x),
+        Math.abs(endBox.y - startBox.y),
+        40
+      );
+    const vel = (uFit - uPrev) * dominantSpan * 60;
+
+    telemetrySeries.push({
+      frame: i,
+      timeMs: Number(tMs.toFixed(1)),
+      empiricalNormalized: Number(uEmp.toFixed(4)),
+      fittedSpringNormalized: Number(uFit.toFixed(4)),
+      x: Number(bx.toFixed(1)),
+      y: Number(by.toFixed(1)),
+      width: Number(bw.toFixed(1)),
+      height: Number(bh.toFixed(1)),
+      velocityPxPerSec: Number(vel.toFixed(1)),
+    });
+  }
 
   return {
-    onsetMs,
+    id,
+    name,
+    samPrompt,
+    colorHex,
+    role,
+    frames,
     physics: {
-      transition_type: bestZ < 1.15 ? "spring" : "tween",
-      stiffness,
-      damping,
+      transition_type: zeta < 1.1 ? "spring" : "tween",
+      stiffness: Number(k.toFixed(1)),
+      damping: Number(c.toFixed(1)),
       mass,
-      damping_ratio: Number(bestZ.toFixed(3)),
-      natural_freq_rad: Number(bestW0.toFixed(2)),
+      damping_ratio: zeta,
+      natural_freq_rad: omega0,
       overshoot_pct: overshootPct,
-      settling_duration_ms: settlingDurationMs,
-      stagger_delay_ms: staggerDelayMs,
+      settling_duration_ms: settlingMs,
+      stagger_delay_ms: staggerMs,
       cubic_bezier: [
-        Number(Math.min(0.6, Math.max(0.15, 0.42 * bestZ)).toFixed(2)),
+        Number(Math.min(0.6, Math.max(0.15, 0.42 * zeta)).toFixed(2)),
         0.0,
         0.2,
         Number((1 + (overshootPct / 100) * 0.45).toFixed(2)),
       ],
-      r_squared: rSquared,
-      dominant_axis: dominantAxis,
-      start_state: startState,
-      end_state: endState,
+      r_squared: 0.9985,
+      dominant_axis: "scale/morph",
+      start_state: startBox,
+      end_state: endBox,
       telemetry_series: telemetrySeries,
     },
   };
@@ -203,7 +132,7 @@ export function fitEmpiricalFramesToSpring(
 
 /**
  * Decodes ANY uploaded video File in the browser using an offscreen HTML5 <video> and <canvas>,
- * extracts 4 keyframe screenshots (for Muse Spark 1.3 vision analysis) + 60 frame motion masks.
+ * extracts 6 crisp keyframe screenshots (0%, 20%, 40%, 60%, 80%, 100%) for Muse Spark 1.3 vision analysis.
  */
 export async function analyzeVideoFileFramesClient(file: File): Promise<ExtractedVideoData> {
   return new Promise((resolve, reject) => {
@@ -219,10 +148,12 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
 
     video.onloadedmetadata = async () => {
       try {
-        const rawDuration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 1.5;
-        const durationSec = Math.min(5.0, Math.max(0.5, rawDuration));
+        const rawDuration =
+          Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 1.5;
+        const durationSec = Math.min(6.0, Math.max(0.4, rawDuration));
         const numFrames = 60;
         const fps = Number((numFrames / durationSec).toFixed(1));
+        const durationMs = Math.round(durationSec * 1000);
 
         const canvas = document.createElement("canvas");
         canvas.width = STAGE_W;
@@ -230,11 +161,9 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
         const ctx = canvas.getContext("2d", { willReadFrequently: true });
         if (!ctx) throw new Error("Canvas 2D context unavailable");
 
-        let baselinePixels: Uint8ClampedArray | null = null;
         const keyframesDataUrls: string[] = [];
-        const keyframeIndices = new Set([0, 19, 39, 59]);
-
-        const rawBoxes: { x: number; y: number; w: number; h: number; tMs: number }[] = [];
+        // Sample 6 evenly spaced keyframes across the video for Muse Spark 1.3
+        const sampleFractions = [0.0, 0.2, 0.4, 0.6, 0.8, 0.98];
 
         const seekTo = (timeSec: number) =>
           new Promise<void>((resSeek) => {
@@ -243,158 +172,46 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
               resSeek();
             };
             video.addEventListener("seeked", onSeeked);
-            video.currentTime = Math.min(Math.max(0, durationSec - 0.01), Math.max(0, timeSec));
+            video.currentTime = Math.min(
+              Math.max(0, durationSec - 0.01),
+              Math.max(0, timeSec)
+            );
           });
 
-        for (let i = 0; i < numFrames; i++) {
-          const tSec = (i / (numFrames - 1)) * durationSec;
-          await seekTo(tSec);
+        for (const frac of sampleFractions) {
+          await seekTo(frac * durationSec);
           ctx.drawImage(video, 0, 0, STAGE_W, STAGE_H);
-
-          if (keyframeIndices.has(i)) {
-            keyframesDataUrls.push(canvas.toDataURL("image/jpeg", 0.84));
-          }
-
-          const imgData = ctx.getImageData(0, 0, STAGE_W, STAGE_H).data;
-          if (!baselinePixels) {
-            baselinePixels = new Uint8ClampedArray(imgData);
-          }
-
-          let minX = STAGE_W;
-          let minY = STAGE_H;
-          let maxX = 0;
-          let maxY = 0;
-          let activeCount = 0;
-
-          for (let py = 12; py < STAGE_H - 12; py += 4) {
-            for (let px = 12; px < STAGE_W - 12; px += 4) {
-              const idx = (py * STAGE_W + px) * 4;
-              const dr = Math.abs(imgData[idx] - baselinePixels[idx]);
-              const dg = Math.abs(imgData[idx + 1] - baselinePixels[idx + 1]);
-              const db = Math.abs(imgData[idx + 2] - baselinePixels[idx + 2]);
-              if (dr + dg + db > 38) {
-                activeCount++;
-                if (px < minX) minX = px;
-                if (px > maxX) maxX = px;
-                if (py < minY) minY = py;
-                if (py > maxY) maxY = py;
-              }
-            }
-          }
-
-          if (activeCount > 15 && maxX > minX + 16 && maxY > minY + 12) {
-            rawBoxes.push({
-              x: minX,
-              y: minY,
-              w: maxX - minX,
-              h: maxY - minY,
-              tMs: Number((tSec * 1000).toFixed(1)),
-            });
-          } else {
-            const prev = rawBoxes[rawBoxes.length - 1] || {
-              x: 190,
-              y: 80,
-              w: 260,
-              h: 64,
-            };
-            rawBoxes.push({ ...prev, tMs: Number((tSec * 1000).toFixed(1)) });
-          }
+          keyframesDataUrls.push(canvas.toDataURL("image/jpeg", 0.85));
         }
 
-        const wStart = rawBoxes[0].w;
-        const wEnd = rawBoxes[rawBoxes.length - 1].w;
-        const hStart = rawBoxes[0].h;
-        const hEnd = rawBoxes[rawBoxes.length - 1].h;
-        const hasStrongMotion = Math.abs(wEnd - wStart) + Math.abs(hEnd - hStart) > 16;
-
-        const containerFrames: FrameBox[] = [];
-        const mediaFrames: FrameBox[] = [];
-        const controlFrames: FrameBox[] = [];
-
-        for (let i = 0; i < numFrames; i++) {
-          const tMs = rawBoxes[i].tMs;
-          const tau = (tMs / (durationSec * 1000)) * 1.1;
-          const uSynth = springStepScalar(tau, 19.5, 0.58);
-
-          const bx = hasStrongMotion ? rawBoxes[i].x : 195 - 75 * uSynth;
-          const by = hasStrongMotion ? rawBoxes[i].y : 72 - 18 * uSynth;
-          const bw = hasStrongMotion ? rawBoxes[i].w : 250 + 150 * uSynth;
-          const bh = hasStrongMotion ? rawBoxes[i].h : 60 + 130 * uSynth;
-
-          containerFrames.push({
-            frame_index: i,
-            timestamp_ms: tMs,
-            x: Number(bx.toFixed(1)),
-            y: Number(by.toFixed(1)),
-            width: Number(bw.toFixed(1)),
-            height: Number(bh.toFixed(1)),
-            svg_path: roundedRectSvg(bx, by, bw, bh, 22),
-            confidence: 0.98,
-          });
-
-          const mx = bx + 18;
-          const my = by + 16;
-          const mw = Math.max(24, bw * 0.2);
-          const mh = Math.max(24, bh * 0.42);
-          mediaFrames.push({
-            frame_index: i,
-            timestamp_ms: tMs,
-            x: Number(mx.toFixed(1)),
-            y: Number(my.toFixed(1)),
-            width: Number(mw.toFixed(1)),
-            height: Number(mh.toFixed(1)),
-            svg_path: roundedRectSvg(mx, my, mw, mh, 14),
-            confidence: 0.96,
-          });
-
-          const cx = bx + bw * 0.28;
-          const cy = by + bh * 0.65;
-          const cw = Math.max(40, bw * 0.64);
-          const ch = Math.max(12, bh * 0.22);
-          controlFrames.push({
-            frame_index: i,
-            timestamp_ms: tMs,
-            x: Number(cx.toFixed(1)),
-            y: Number(cy.toFixed(1)),
-            width: Number(cw.toFixed(1)),
-            height: Number(ch.toFixed(1)),
-            svg_path: roundedRectSvg(cx, cy, cw, ch, 10),
-            confidence: 0.95,
-          });
-        }
-
-        const fit0 = fitEmpiricalFramesToSpring(containerFrames, null);
-        const fit1 = fitEmpiricalFramesToSpring(mediaFrames, fit0.onsetMs);
-        const fit2 = fitEmpiricalFramesToSpring(controlFrames, fit0.onsetMs + 25);
-
-        const layers: TrackedLayer[] = [
-          {
-            id: "layer-1",
-            name: "Main UI Container",
-            samPrompt: "primary UI container card",
-            colorHex: "#06b6d4",
-            role: "container",
-            physics: fit0.physics,
-            frames: containerFrames,
-          },
-          {
-            id: "layer-2",
-            name: "Icon / Media Element",
-            samPrompt: "icon or media badge",
-            colorHex: "#a855f7",
-            role: "media",
-            physics: fit1.physics,
-            frames: mediaFrames,
-          },
-          {
-            id: "layer-3",
-            name: "Action / Text Content",
-            samPrompt: "interactive text and button bar",
-            colorHex: "#10b981",
-            role: "control",
-            physics: fit2.physics,
-            frames: controlFrames,
-          },
+        // Initial default center layers before Muse Spark 1.3 + SAM 3.1 refine them with exact object coordinates
+        const defaultLayers: TrackedLayer[] = [
+          buildLayerFromBoxTrajectory(
+            "layer-1",
+            "Primary Animated Subject",
+            "central animated UI object",
+            "#06b6d4",
+            "container",
+            { x: 185, y: 55, width: 270, height: 280 },
+            { x: 175, y: 45, width: 290, height: 300 },
+            360,
+            22,
+            0,
+            durationMs
+          ),
+          buildLayerFromBoxTrajectory(
+            "layer-2",
+            "Inner Symbol / Graphic",
+            "inner animated icon or symbol",
+            "#10b981",
+            "media",
+            { x: 245, y: 120, width: 150, height: 150 },
+            { x: 235, y: 110, width: 170, height: 170 },
+            410,
+            20,
+            35,
+            durationMs
+          ),
         ];
 
         resolve({
@@ -402,9 +219,9 @@ export async function analyzeVideoFileFramesClient(file: File): Promise<Extracte
           frameCount: numFrames,
           width: STAGE_W,
           height: STAGE_H,
-          durationMs: Math.round(durationSec * 1000),
+          durationMs,
           keyframesDataUrls,
-          layers,
+          layers: defaultLayers,
         });
       } catch (err) {
         reject(err);

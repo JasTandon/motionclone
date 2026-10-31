@@ -236,30 +236,41 @@ export default function VideoMaskStage({
                         r={isSelected ? 4 : 2.5}
                         fill={layer.colorHex}
                       />
-                      <g transform={`translate(${frame.x}, ${Math.max(18, frame.y - 6)})`}>
-                        <rect
-                          x={0}
-                          y={-16}
-                          width={Math.min(250, layer.name.length * 7.2 + 64)}
-                          height={18}
-                          rx={4}
-                          fill="#050811"
-                          fillOpacity={0.9}
-                          stroke={layer.colorHex}
-                          strokeWidth={1}
-                        />
-                        <text
-                          x={6}
-                          y={-4}
-                          fill={layer.colorHex}
-                          fontSize="10"
-                          fontFamily="monospace"
-                          fontWeight="bold"
-                        >
-                          {layer.name} ({Math.round(frame.width)}×
-                          {Math.round(frame.height)}px)
-                        </text>
-                      </g>
+                      {(() => {
+                        const shortName =
+                          layer.name.length > 28
+                            ? `${layer.name.slice(0, 26)}…`
+                            : layer.name;
+                        const labelText = `${shortName} (${Math.round(frame.width)}×${Math.round(frame.height)}px)`;
+                        const pillW = Math.min(310, labelText.length * 6.2 + 16);
+                        const safeX = Math.max(6, Math.min(634 - pillW, frame.x));
+                        const safeY = Math.max(20, Math.min(394, frame.y - 6));
+                        return (
+                          <g transform={`translate(${safeX}, ${safeY})`}>
+                            <rect
+                              x={0}
+                              y={-16}
+                              width={pillW}
+                              height={18}
+                              rx={4}
+                              fill="#050811"
+                              fillOpacity={0.9}
+                              stroke={layer.colorHex}
+                              strokeWidth={1}
+                            />
+                            <text
+                              x={6}
+                              y={-4}
+                              fill={layer.colorHex}
+                              fontSize="10"
+                              fontFamily="monospace"
+                              fontWeight="bold"
+                            >
+                              {labelText}
+                            </text>
+                          </g>
+                        );
+                      })()}
                     </>
                   )}
                 </g>

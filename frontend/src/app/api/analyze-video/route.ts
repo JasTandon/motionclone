@@ -17,10 +17,36 @@ function extractCodeBlock(text: string, lang: string): string | null {
 
 /**
  * Ensures <svg> tags default to fill="none" so open stroke <path> elements
- * never render default black diagonal triangles over icons.
+ * never render default black diagonal triangles over icons, and injects a
+ * universal postMessage bridge so "Replay Animation" always restarts the timeline.
  */
 function sanitizeGeneratedHtml(html: string): string {
-  return html.replace(/<svg\b(?![^>]*\bfill=)/gi, '<svg fill="none"');
+  let out = html.replace(/<svg\b(?![^>]*\bfill=)/gi, '<svg fill="none"');
+  const replayBridge = `<script>
+window.addEventListener("message", function(ev) {
+  if (ev.data === "REPLAY_ANIMATION" || (ev.data && ev.data.type === "REPLAY_ANIMATION")) {
+    try {
+      if (typeof start !== "undefined") start = performance.now();
+      if (typeof t0 !== "undefined") t0 = performance.now();
+      if (typeof rangeT0 !== "undefined") rangeT0 = performance.now();
+      if (typeof renderAt === "function") renderAt(0);
+      var btns = document.querySelectorAll("button");
+      for (var i = 0; i < btns.length; i++) {
+        if (/loop|all|replay/i.test(btns[i].textContent || "")) {
+          btns[i].click();
+          break;
+        }
+      }
+    } catch (e) {}
+  }
+});
+</script>`;
+  if (out.includes("</body>")) {
+    out = out.replace("</body>", `${replayBridge}\n</body>`);
+  } else {
+    out += replayBridge;
+  }
+  return out;
 }
 
 export async function POST(request: Request) {
@@ -304,6 +330,49 @@ Return ONLY valid JSON matching this schema (no markdown commentary):
         combinedText.includes("bentomotion"));
 
     baseResult.usedLiveMetaApi = true;
+    const primaryLayer = baseResult.layers[0]?.physics;
+    if (primaryLayer) {
+      const respSec = ((2 * Math.PI) / Math.max(1, primaryLayer.natural_freq_rad)).toFixed(3);
+      baseResult.codeExports.swiftuiCode = `import SwiftUI
+
+// Compiled by MotionClone — ${baseResult.interactionTitle}
+// SAM 3.1 + Muse Spark 1.3 Harmonic Spring Fit
+struct ClonedMotionView: View {
+    @State private var isExpanded = false
+    private let spring = Animation.spring(response: ${respSec}, dampingFraction: ${primaryLayer.damping_ratio})
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: isExpanded ? 36 : 24, style: .continuous)
+            .fill(Color(hex: "${sceneBackgroundHex}"))
+            .frame(
+                width: isExpanded ? ${Math.round(primaryLayer.end_state.width)} : ${Math.round(primaryLayer.start_state.width)},
+                height: isExpanded ? ${Math.round(primaryLayer.end_state.height)} : ${Math.round(primaryLayer.start_state.height)}
+            )
+            .animation(spring, value: isExpanded)
+            .onTapGesture { isExpanded.toggle() }
+    }
+}`;
+      baseResult.codeExports.cssCode = `/* Compiled by MotionClone — ${baseResult.interactionTitle} */
+:root {
+  --mc-stiffness: ${primaryLayer.stiffness};
+  --mc-damping: ${primaryLayer.damping};
+  --mc-overshoot: ${primaryLayer.overshoot_pct}%;
+  --mc-duration: ${primaryLayer.settling_duration_ms}ms;
+  --mc-easing: cubic-bezier(${primaryLayer.cubic_bezier.join(", ")});
+}
+
+.cloned-motion-layer {
+  width: ${Math.round(primaryLayer.start_state.width)}px;
+  height: ${Math.round(primaryLayer.start_state.height)}px;
+  transition: all var(--mc-duration) var(--mc-easing);
+}
+
+.cloned-motion-layer.active {
+  width: ${Math.round(primaryLayer.end_state.width)}px;
+  height: ${Math.round(primaryLayer.end_state.height)}px;
+}`;
+    }
+
     pipelineLogs.push(
       `Muse Spark 1.3 (${MUSE_MODEL_ID}): Extracted 5-phase "${baseResult.interactionTitle}" (${isGooeyMetaball ? "gooey_metaball_blobs" : isFaceIdMorph ? "face_id_3d_morph" : "general_ui_choreography"}) across ${imageBlocks.length} frames.`
     );

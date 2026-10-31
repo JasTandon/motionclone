@@ -42,6 +42,7 @@ export default function LiveCodeSandbox({
   );
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
   const [copied, setCopied] = useState<boolean>(false);
+  const [iframeKey, setIframeKey] = useState<number>(0);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   const [liveStiffness, setLiveStiffness] = useState<number>(
@@ -77,8 +78,11 @@ export default function LiveCodeSandbox({
   }, [selectedLayer, analysis]);
 
   const handleReplayAnimation = () => {
-    if (customPreviewHtml && iframeRef.current?.contentWindow) {
-      iframeRef.current.contentWindow.postMessage("REPLAY_ANIMATION", "*");
+    if (customPreviewHtml) {
+      if (iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.postMessage("REPLAY_ANIMATION", "*");
+      }
+      setIframeKey((k) => k + 1);
     } else {
       setIsExpanded(false);
       setTimeout(() => setIsExpanded(true), 240);
@@ -266,6 +270,7 @@ export default function LiveCodeSandbox({
             {/* If uploaded video generated custom HTML from Muse Spark 1.3, render it live in an iframe! */}
             {customPreviewHtml ? (
               <iframe
+                key={iframeKey}
                 ref={iframeRef}
                 title="Muse Spark 1.3 Live Cloned UI"
                 srcDoc={customPreviewHtml}

@@ -9,6 +9,28 @@ function extractCodeBlock(text: string, lang: string): string | null {
   return match ? match[1].trim() : null;
 }
 
+function sanitizeGeneratedHtml(html: string): string {
+  let out = html.replace(/<svg\b(?![^>]*\bfill=)/gi, '<svg fill="none"');
+  if (!out.includes("REPLAY_ANIMATION")) {
+    const replayBridge = `<script>
+window.addEventListener("message", function(ev) {
+  if (ev.data === "REPLAY_ANIMATION" || (ev.data && ev.data.type === "REPLAY_ANIMATION")) {
+    try {
+      if (typeof start !== "undefined") start = performance.now();
+      if (typeof t0 !== "undefined") t0 = performance.now();
+      if (typeof rangeT0 !== "undefined") rangeT0 = performance.now();
+      if (typeof renderAt === "function") renderAt(0);
+    } catch (e) {}
+  }
+});
+</script>`;
+    out = out.includes("</body>")
+      ? out.replace("</body>", `${replayBridge}\n</body>`)
+      : out + replayBridge;
+  }
+  return out;
+}
+
 export async function POST(request: Request) {
   const body = await request.json();
   const userPrompt: string = body.userPrompt || "";
@@ -26,10 +48,12 @@ export async function POST(request: Request) {
         },
         body: JSON.stringify({
           model: MUSE_MODEL_ID,
+          temperature: 0.15,
           messages: [
             {
               role: "user",
               content: `You are Meta Muse Spark 1.3 inside MotionClone. Update the cloned UI animation according to the user's request: "${userPrompt}".
+Ensure every <svg> and open stroke <path> includes fill="none", and keep the stage compact (height <= 230px) so nothing clips inside a 325px preview viewport.
 Output TWO fenced code blocks:
 1. First, a \`\`\`html ... \`\`\` block with the updated self-contained HTML5 + Tailwind + SVG/JS interactive preview.
 2. Second, a \`\`\`tsx ... \`\`\` block with the updated React + Framer Motion component code.
@@ -54,7 +78,9 @@ ${currentReactCode}`,
         return NextResponse.json({
           status: "refined_via_muse_spark",
           notice: `Muse Spark 1.3 applied: "${userPrompt}"`,
-          livePreviewHtml: htmlBlock || currentPreviewHtml,
+          livePreviewHtml: htmlBlock
+            ? sanitizeGeneratedHtml(htmlBlock)
+            : currentPreviewHtml,
           reactCode: tsxBlock || currentReactCode,
         });
       }

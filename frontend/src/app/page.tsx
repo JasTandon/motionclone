@@ -78,8 +78,10 @@ export default function MotionCloneStudioPage() {
 
   const handleVideoFileUpload = async (file: File, overrideKey?: string) => {
     setLastUploadedFile(file);
-    const localUrl = URL.createObjectURL(file);
-    setUploadedVideoUrl(localUrl);
+    setUploadedVideoUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
 
     const activeKey = (overrideKey ?? apiKey).trim();
     if (!activeKey) {
@@ -92,7 +94,7 @@ export default function MotionCloneStudioPage() {
 
     setIsLoading(true);
     setStatusBanner(
-      `Step 1/2: Sampling 6 sequential keyframes across "${file.name}"...`
+      `Step 1/2: Sampling 10 sequential keyframes across "${file.name}"...`
     );
 
     try {
@@ -326,6 +328,7 @@ export default function MotionCloneStudioPage() {
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) handleVideoFileUpload(file);
+                e.target.value = "";
               }}
             />
             <button
@@ -432,7 +435,7 @@ export default function MotionCloneStudioPage() {
               Meta Muse Spark 1.3 & SAM 3.1 Are Analyzing Your Video...
             </h3>
             <p className="text-xs text-slate-300 max-w-lg leading-relaxed">
-              Inspecting 6 sequential keyframes from your video, locating moving UI elements and icons, extracting spring speed/bounce, and building a custom interactive HTML/SVG/Tailwind + React Framer Motion clone.
+              Inspecting 10 sequential keyframes from your video, locating moving UI elements and icons, extracting spring speed/bounce, and building a custom interactive HTML/SVG/Tailwind + React Framer Motion clone.
             </p>
           </div>
         ) : (

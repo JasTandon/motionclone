@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { memo, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Code2,
@@ -20,6 +20,16 @@ import {
 } from "lucide-react";
 import { AnalysisPayload, TrackedLayer, VerificationResult } from "@/types/motion";
 import { verifyTrajectoryLocal } from "@/lib/localPhysicsEngine";
+import {
+  buildCssCode,
+  buildReactFallbackCode,
+  buildSwiftUICode,
+  patchReactSprings,
+  springFor,
+  SpringOverrides,
+  SpringParams,
+} from "@/lib/codegen";
+import { injectPreviewRuntime } from "@/lib/generatedHtml";
 
 interface LiveCodeSandboxProps {
   analysis: AnalysisPayload;
@@ -28,7 +38,7 @@ interface LiveCodeSandboxProps {
   apiKey: string;
 }
 
-export default function LiveCodeSandbox({
+function LiveCodeSandbox({
   analysis,
   selectedLayer,
   apiBaseUrl,
@@ -45,13 +55,17 @@ export default function LiveCodeSandbox({
   const [iframeKey, setIframeKey] = useState<number>(0);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  const [liveStiffness, setLiveStiffness] = useState<number>(
-    selectedLayer.physics.stiffness
-  );
-  const [liveDamping, setLiveDamping] = useState<number>(
-    selectedLayer.physics.damping
-  );
-  const [liveMass, setLiveMass] = useState<number>(selectedLayer.physics.mass);
+  // Per-layer spring edits (sliders / Auto-Fix). Drives the preview and every export.
+  const [overrides, setOverrides] = useState<SpringOverrides>({});
+  const live = springFor(selectedLayer, overrides);
+  const liveStiffness = live.stiffness;
+  const liveDamping = live.damping;
+  const liveMass = live.mass;
+  const setLive = (patch: Partial<SpringParams>) =>
+    setOverrides((prev) => ({
+      ...prev,
+      [selectedLayer.id]: { ...springFor(selectedLayer, prev), ...patch },
+    }));
 
   const [verification, setVerification] = useState<VerificationResult | null>(
     null
@@ -67,21 +81,52 @@ export default function LiveCodeSandbox({
     analysis.livePreviewHtml
   );
   const [sparkStatus, setSparkStatus] = useState<string | null>(null);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
 
+  // New analysis → reset generated code and edits. Switching layers keeps both.
   useEffect(() => {
-    setLiveStiffness(selectedLayer.physics.stiffness);
-    setLiveDamping(selectedLayer.physics.damping);
-    setLiveMass(selectedLayer.physics.mass);
+    setOverrides({});
     setCustomReactCode(analysis.codeExports.reactCode);
     setCustomPreviewHtml(analysis.livePreviewHtml);
+    setRuntimeError(null);
+    setSparkStatus(null);
+  }, [analysis]);
+
+  useEffect(() => {
     setVerification(null);
   }, [selectedLayer, analysis]);
 
+  // Live springs injected into the generated document; debounced so dragging stays smooth.
+  const springMap = useMemo(
+    () => ({
+      primary: live,
+      layers: Object.fromEntries(analysis.layers.map((l) => [l.id, springFor(l, overrides)])),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [analysis.layers, overrides, selectedLayer.id]
+  );
+  const [debouncedSprings, setDebouncedSprings] = useState(springMap);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSprings(springMap), 220);
+    return () => clearTimeout(t);
+  }, [springMap]);
+  const previewSrcDoc = useMemo(
+    () => (customPreviewHtml ? injectPreviewRuntime(customPreviewHtml, debouncedSprings) : undefined),
+    [customPreviewHtml, debouncedSprings]
+  );
+
+  useEffect(() => {
+    const onMessage = (ev: MessageEvent) => {
+      if (ev.source !== iframeRef.current?.contentWindow) return;
+      if (ev.data && ev.data.type === "MC_PREVIEW_ERROR") setRuntimeError(String(ev.data.message));
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
   const handleReplayAnimation = () => {
     if (customPreviewHtml) {
-      if (iframeRef.current?.contentWindow) {
-        iframeRef.current.contentWindow.postMessage("REPLAY_ANIMATION", "*");
-      }
+      setRuntimeError(null);
       setIframeKey((k) => k + 1);
     } else {
       setIsExpanded(false);
@@ -89,103 +134,94 @@ export default function LiveCodeSandbox({
     }
   };
 
-  const runClosedLoopVerification = async (
+  const runClosedLoopVerification = (
     stiff = liveStiffness,
     damp = liveDamping,
     m = liveMass
   ) => {
     setIsVerifying(true);
-    try {
-      const res = await fetch(`${apiBaseUrl}/api/verify-physics`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          presetId: analysis.presetId,
-          layerId: selectedLayer.id,
-          candidateStiffness: stiff,
-          candidateDamping: damp,
-          candidateMass: m,
-          customTelemetry: selectedLayer.physics,
-        }),
-      });
-      if (res.ok) {
-        const data: VerificationResult = await res.json();
-        setVerification(data);
-        setActiveTab("verify");
-      } else {
-        throw new Error("Fallback local");
-      }
-    } catch {
-      const localResult = verifyTrajectoryLocal(selectedLayer, stiff, damp, m);
-      setVerification(localResult);
-      setActiveTab("verify");
-    } finally {
-      setIsVerifying(false);
-    }
+    setVerification(verifyTrajectoryLocal(selectedLayer, stiff, damp, m));
+    setActiveTab("verify");
+    setIsVerifying(false);
   };
+
+  useEffect(() => {
+    if (activeTab === "verify" && !verification) runClosedLoopVerification();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, verification]);
 
   const applySelfHealingPatch = () => {
-    const targetK = selectedLayer.physics.stiffness;
-    const targetC = selectedLayer.physics.damping;
-    const targetM = selectedLayer.physics.mass;
-    setLiveStiffness(targetK);
-    setLiveDamping(targetC);
-    setLiveMass(targetM);
-    runClosedLoopVerification(targetK, targetC, targetM);
+    const patch = verification?.recommendedPatch;
+    if (!patch) return;
+    setLive({ stiffness: patch.stiffness, damping: patch.damping, mass: patch.mass });
+    runClosedLoopVerification(patch.stiffness, patch.damping, patch.mass);
   };
 
-  const handleRefineWithSpark = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!sparkPrompt.trim()) return;
+  const callSpark = async (payload: { userPrompt?: string; runtimeError?: string }) => {
     setIsRefining(true);
-    setSparkStatus("Muse Spark 1.3 is updating your cloned UI & code...");
+    setSparkStatus(
+      payload.runtimeError
+        ? "Muse Spark 1.3 is repairing the runtime error…"
+        : "Muse Spark 1.3 is updating your cloned UI & code…"
+    );
     try {
       const res = await fetch(`${apiBaseUrl}/api/refine-with-spark`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          interactionTitle: analysis.interactionTitle,
-          userPrompt: sparkPrompt,
-          layersTelemetry: analysis.layers,
+          ...payload,
           currentReactCode: customReactCode,
           currentPreviewHtml: customPreviewHtml || "",
           apiKey: apiKey || undefined,
         }),
       });
       const data = await res.json();
-      if (data.reactCode) {
-        setCustomReactCode(data.reactCode);
+      if (res.ok) {
+        if (data.reactCode) setCustomReactCode(data.reactCode);
+        if (data.livePreviewHtml) {
+          setCustomPreviewHtml(data.livePreviewHtml);
+          setRuntimeError(null);
+          setIframeKey((k) => k + 1);
+        }
+        setSparkPrompt("");
       }
-      if (data.livePreviewHtml) {
-        setCustomPreviewHtml(data.livePreviewHtml);
-      }
-      setSparkStatus(
-        data.notice || "Updated by Meta Muse Spark 1.3!"
-      );
-      setSparkPrompt("");
-    } catch {
-      setSparkStatus("Applied prompt refinement to code.");
+      setSparkStatus(`${res.ok ? "✨" : "⚠️"} ${data.notice || (res.ok ? "Updated." : `HTTP ${res.status}`)}`);
+    } catch (err) {
+      setSparkStatus(`⚠️ Could not reach Muse Spark: ${String(err).slice(0, 120)}`);
     } finally {
       setIsRefining(false);
     }
   };
 
-  const activeCode =
-    exportLang === "react"
-      ? customReactCode
-      : exportLang === "swiftui"
-      ? analysis.codeExports.swiftuiCode
-      : analysis.codeExports.cssCode;
+  const handleRefineWithSpark = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sparkPrompt.trim() || isRefining) return;
+    callSpark({ userPrompt: sparkPrompt.trim() });
+  };
+
+  const exportLayers = analysis.layers;
+  const activeCode = useMemo(() => {
+    if (exportLang === "swiftui")
+      return buildSwiftUICode(analysis.interactionTitle, exportLayers, overrides, analysis.sceneBackgroundHex || "#000000");
+    if (exportLang === "css") return buildCssCode(analysis.interactionTitle, exportLayers, overrides);
+    const isOriginal = customReactCode === analysis.codeExports.reactCode;
+    // Example presets ship hand-written React; uploads get Muse code patched with live springs.
+    if (analysis.isExample && isOriginal && Object.keys(overrides).length)
+      return buildReactFallbackCode(analysis.interactionTitle, exportLayers, overrides);
+    return patchReactSprings(customReactCode, exportLayers, overrides);
+  }, [exportLang, analysis, exportLayers, overrides, customReactCode]);
 
   const copyCode = () => {
-    navigator.clipboard.writeText(activeCode);
+    navigator.clipboard?.writeText(activeCode).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
   };
 
-  const l0 = analysis.layers[0]?.physics || selectedLayer.physics;
-  const l1 = analysis.layers[1]?.physics || l0;
-  const l2 = analysis.layers[2]?.physics || l1;
+  const l0 = analysis.layers[0] ? springFor(analysis.layers[0], overrides) : live;
+  const l1Layer = analysis.layers[1] || analysis.layers[0] || selectedLayer;
+  const l2Layer = analysis.layers[2] || l1Layer;
+  const l1 = { ...springFor(l1Layer, overrides), stagger_delay_ms: l1Layer.physics.stagger_delay_ms };
+  const l2 = { ...springFor(l2Layer, overrides), stagger_delay_ms: l2Layer.physics.stagger_delay_ms };
 
   return (
     <div className="flex flex-col h-full bg-[#090d18] border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl">
@@ -199,7 +235,7 @@ export default function LiveCodeSandbox({
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
               Cloned Working UI & Code
               {analysis.usedLiveMetaApi && (
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                <span className="whitespace-nowrap px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                   Muse Spark 1.3 Live
                 </span>
               )}
@@ -233,10 +269,7 @@ export default function LiveCodeSandbox({
             Get Code
           </button>
           <button
-            onClick={() => {
-              if (!verification) runClosedLoopVerification();
-              else setActiveTab("verify");
-            }}
+            onClick={() => runClosedLoopVerification()}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
               activeTab === "verify"
                 ? "bg-emerald-500 text-slate-950 shadow"
@@ -256,7 +289,7 @@ export default function LiveCodeSandbox({
           <div className="relative flex-1 min-h-[340px] rounded-xl bg-gradient-to-b from-[#050811] via-[#091122] to-[#050811] border border-slate-800/90 flex flex-col items-center justify-center p-2 overflow-hidden">
             <div className="absolute top-3 left-3 z-20 flex items-center gap-2 text-[11px] font-mono text-slate-300 bg-slate-950/85 px-2.5 py-1 rounded-lg border border-slate-800 pointer-events-none">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              Live Cloned Component (Click UI to toggle!)
+              {customPreviewHtml ? "Live clone · springs update as you drag" : "Live Cloned Component (click to toggle)"}
             </div>
 
             <button
@@ -268,15 +301,30 @@ export default function LiveCodeSandbox({
             </button>
 
             {/* If uploaded video generated custom HTML from Muse Spark 1.3, render it live in an iframe! */}
-            {customPreviewHtml ? (
-              <iframe
-                key={iframeKey}
-                ref={iframeRef}
-                title="Muse Spark 1.3 Live Cloned UI"
-                srcDoc={customPreviewHtml}
-                className="w-full h-[325px] border-0 rounded-lg bg-transparent"
-                sandbox="allow-scripts"
-              />
+            {previewSrcDoc ? (
+              <>
+                <iframe
+                  key={iframeKey}
+                  ref={iframeRef}
+                  title="Muse Spark 1.3 Live Cloned UI"
+                  srcDoc={previewSrcDoc}
+                  className="w-full h-[325px] border-0 rounded-lg bg-transparent"
+                  sandbox="allow-scripts"
+                />
+                {runtimeError && (
+                  <div className="absolute bottom-3 left-3 right-3 z-20 flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-950/90 px-3 py-2 text-[11px] text-amber-100">
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                    <span className="flex-1 truncate font-mono">Runtime error: {runtimeError}</span>
+                    <button
+                      onClick={() => callSpark({ runtimeError })}
+                      disabled={isRefining}
+                      className="shrink-0 rounded-md bg-amber-400 px-2.5 py-1 font-bold text-slate-950 hover:bg-amber-300 disabled:opacity-60"
+                    >
+                      {isRefining ? "Repairing…" : "Self-heal with Muse Spark"}
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
               <>
                 {/* Built-in example 1: Dynamic Island */}
@@ -291,9 +339,9 @@ export default function LiveCodeSandbox({
                     }}
                     transition={{
                       type: "spring",
-                      stiffness: liveStiffness,
-                      damping: liveDamping,
-                      mass: liveMass,
+                      stiffness: l0.stiffness,
+                      damping: l0.damping,
+                      mass: l0.mass,
                     }}
                     className="cursor-pointer bg-black border border-white/15 shadow-[0_20px_60px_rgba(6,182,212,0.22)] px-4 py-3 flex flex-col justify-between overflow-hidden"
                   >
@@ -309,6 +357,7 @@ export default function LiveCodeSandbox({
                           type: "spring",
                           stiffness: l1.stiffness,
                           damping: l1.damping,
+                          mass: l1.mass,
                           delay: l1.stagger_delay_ms / 1000,
                         }}
                         className="bg-gradient-to-br from-cyan-400 via-blue-500 to-purple-600 flex items-center justify-center shrink-0 shadow-lg"
@@ -400,9 +449,9 @@ export default function LiveCodeSandbox({
                     }}
                     transition={{
                       type: "spring",
-                      stiffness: liveStiffness,
-                      damping: liveDamping,
-                      mass: liveMass,
+                      stiffness: l0.stiffness,
+                      damping: l0.damping,
+                      mass: l0.mass,
                     }}
                     className="cursor-pointer rounded-3xl bg-slate-900/95 border border-slate-700/80 shadow-[0_20px_60px_rgba(236,72,153,0.18)] p-4 flex flex-col justify-between overflow-hidden"
                   >
@@ -465,9 +514,9 @@ export default function LiveCodeSandbox({
                       }}
                       transition={{
                         type: "spring",
-                        stiffness: liveStiffness,
-                        damping: liveDamping,
-                        mass: liveMass,
+                        stiffness: l0.stiffness,
+                        damping: l0.damping,
+                        mass: l0.mass,
                       }}
                       className="cursor-pointer rounded-3xl bg-slate-900 border border-blue-500/30 shadow-[0_20px_50px_rgba(59,130,246,0.2)] p-4 flex flex-col justify-between overflow-hidden"
                     >
@@ -508,14 +557,21 @@ export default function LiveCodeSandbox({
 
           {/* Tweak Bounce & Speed Sliders */}
           <div className="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800/90 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5 min-w-0 truncate">
                 <Sliders className="w-3.5 h-3.5 text-cyan-400" />
-                Measured Animation Feel ({selectedLayer.name})
+                Spring ({selectedLayer.name.length > 30 ? `${selectedLayer.name.slice(0, 29)}…` : selectedLayer.name})
               </span>
               <button
+                onClick={() => runClosedLoopVerification()}
+                className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 transition flex items-center gap-1"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                Verify vs. video
+              </button>
+              <button
                 onClick={() => setActiveTab("code")}
-                className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 transition flex items-center gap-1"
+                className="hidden xl:flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 transition flex items-center gap-1"
               >
                 <Code2 className="w-3.5 h-3.5" />
                 View React / CSS Code →
@@ -532,11 +588,11 @@ export default function LiveCodeSandbox({
                 </div>
                 <input
                   type="range"
-                  min={50}
-                  max={800}
+                  min={10}
+                  max={Math.max(1200, Math.ceil(liveStiffness))}
                   step={1}
                   value={liveStiffness}
-                  onChange={(e) => setLiveStiffness(Number(e.target.value))}
+                  onChange={(e) => setLive({ stiffness: Number(e.target.value) })}
                   className="w-full accent-cyan-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
                 />
               </div>
@@ -550,11 +606,11 @@ export default function LiveCodeSandbox({
                 </div>
                 <input
                   type="range"
-                  min={5}
-                  max={80}
+                  min={1}
+                  max={Math.max(80, Math.ceil(liveDamping))}
                   step={0.5}
                   value={liveDamping}
-                  onChange={(e) => setLiveDamping(Number(e.target.value))}
+                  onChange={(e) => setLive({ damping: Number(e.target.value) })}
                   className="w-full accent-purple-400 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
                 />
               </div>
@@ -564,7 +620,7 @@ export default function LiveCodeSandbox({
             <form onSubmit={handleRefineWithSpark} className="pt-1 space-y-1.5">
               {sparkStatus && (
                 <div className="text-xs font-mono text-emerald-300 px-1">
-                  ✨ {sparkStatus}
+                  {sparkStatus}
                 </div>
               )}
               <div className="flex items-center gap-2">
@@ -577,8 +633,8 @@ export default function LiveCodeSandbox({
                 />
                 <button
                   type="submit"
-                  disabled={isRefining}
-                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shrink-0"
+                  disabled={isRefining || !sparkPrompt.trim()}
+                  className="disabled:opacity-60 px-3.5 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shrink-0"
                 >
                   {isRefining ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -612,7 +668,7 @@ export default function LiveCodeSandbox({
                     ? "React + Framer Motion"
                     : lang === "swiftui"
                     ? "SwiftUI Spring"
-                    : "CSS Keyframes"}
+                    : "CSS linear() Spring"}
                 </button>
               ))}
             </div>
@@ -642,7 +698,7 @@ export default function LiveCodeSandbox({
           <form onSubmit={handleRefineWithSpark} className="space-y-1.5">
             {sparkStatus && (
               <div className="text-xs font-mono text-emerald-300 px-1">
-                ✨ {sparkStatus}
+                {sparkStatus}
               </div>
             )}
             <div className="flex items-center gap-2">
@@ -655,8 +711,8 @@ export default function LiveCodeSandbox({
               />
               <button
                 type="submit"
-                disabled={isRefining}
-                className="px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs flex items-center gap-1.5 transition"
+                disabled={isRefining || !sparkPrompt.trim()}
+                className="disabled:opacity-60 px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs flex items-center gap-1.5 transition"
               >
                 <Send className="w-3.5 h-3.5" />
                 Update Code
@@ -691,7 +747,8 @@ export default function LiveCodeSandbox({
                 )}
               </div>
               <p className="text-xs text-slate-300 mt-0.5">
-                Compared original SAM 3.1 video track vs. generated component motion
+                RMSE of the candidate spring vs. {selectedLayer.physics.telemetry_series.length} measured samples
+                {selectedLayer.fitSource ? ` (${selectedLayer.fitSource})` : ""}
               </p>
             </div>
 
@@ -717,7 +774,7 @@ export default function LiveCodeSandbox({
                 Motion Curve Comparison: Original Video vs. Cloned Code
               </span>
               <div className="flex items-center gap-3 text-[11px] font-mono">
-                <span className="text-cyan-300">--- Original Video</span>
+                <span className="text-cyan-300">--- Measured (video)</span>
                 <span
                   className={
                     verification.passedThreshold
@@ -725,7 +782,7 @@ export default function LiveCodeSandbox({
                       : "text-amber-400"
                   }
                 >
-                  ━━ Cloned Component
+                  ━━ Candidate spring
                 </span>
               </div>
             </div>
@@ -775,6 +832,29 @@ export default function LiveCodeSandbox({
             </svg>
           </div>
 
+          <div className="grid grid-cols-3 gap-2 text-[11px] font-mono">
+            <div className="p-2 rounded-lg bg-slate-950 border border-slate-800">
+              <div className="text-slate-500">RMSE</div>
+              <div className="text-slate-100">{verification.rmse}</div>
+            </div>
+            <div className="p-2 rounded-lg bg-slate-950 border border-slate-800">
+              <div className="text-slate-500">Candidate k / c / m</div>
+              <div className="text-slate-100">
+                {verification.generatedParams.stiffness} / {verification.generatedParams.damping} / {verification.generatedParams.mass}
+              </div>
+            </div>
+            <div className="p-2 rounded-lg bg-slate-950 border border-slate-800">
+              <div className="text-slate-500">Measured fit R²</div>
+              <div className="text-slate-100">{selectedLayer.physics.r_squared}</div>
+            </div>
+          </div>
+
+          {verification.passedThreshold && (
+            <p className="text-[11px] text-slate-400 px-1">
+              Drag the Stiffness/Damping sliders on the Interactive UI tab to detune the spring, then Verify again to watch the closed loop catch it.
+            </p>
+          )}
+
           {verification.recommendedPatch && (
             <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2.5">
               <p className="text-xs text-amber-200 leading-relaxed">
@@ -794,3 +874,5 @@ export default function LiveCodeSandbox({
     </div>
   );
 }
+
+export default memo(LiveCodeSandbox);

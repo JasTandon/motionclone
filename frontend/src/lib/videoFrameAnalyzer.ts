@@ -1,5 +1,6 @@
-import { FrameBox, TelemetryPoint, TrackedLayer } from "@/types/motion";
-import { springStepScalar } from "./localPhysicsEngine";
+import { BoxRect, TrackSample, TrackedLayer } from "@/types/motion";
+import { buildMeasuredLayer, GlobalMotionFit, STAGE_H, STAGE_W } from "./trackFusion";
+import { fitSpring, normalizeTransition } from "./springFit";
 
 export interface ExtractedVideoData {
   fps: number;
@@ -8,301 +9,241 @@ export interface ExtractedVideoData {
   height: number;
   durationMs: number;
   keyframesDataUrls: string[];
+  keyframeTimesMs: number[];
+  /** Pixel-diff motion envelope (bbox of changed pixels vs. frame 0) at each sampled frame. */
+  motionTrack: TrackSample[];
+  globalFit: GlobalMotionFit | null;
   layers: TrackedLayer[];
 }
 
-const BRIGHT_PALETTE = ["#06b6d4", "#10b981", "#a855f7", "#f59e0b"];
+const NUM_SAMPLES = 30;
+const NUM_KEYFRAMES = 10;
+const GRID_W = 96;
+const GRID_H = 60;
+const DECODE_TIMEOUT_MS = 12000;
 
-function ensureBrightColor(hex: string, fallbackIdx: number): string {
-  const clean = (hex || "").trim().toLowerCase();
-  if (
-    !clean.startsWith("#") ||
-    clean === "#000" ||
-    clean === "#000000" ||
-    clean === "#111" ||
-    clean === "#111827" ||
-    clean === "#0a0a0a" ||
-    clean === "#ffffff" ||
-    clean === "#fff"
-  ) {
-    return BRIGHT_PALETTE[fallbackIdx % BRIGHT_PALETTE.length];
-  }
-  return hex;
+function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(message)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      }
+    );
+  });
 }
 
-export function roundedRectSvg(x: number, y: number, w: number, h: number, r = 18): string {
-  const rad = Math.max(2, Math.min(r, w / 2, h / 2));
-  return `M ${(x + rad).toFixed(1)} ${y.toFixed(1)} H ${(x + w - rad).toFixed(1)} A ${rad.toFixed(1)} ${rad.toFixed(1)} 0 0 1 ${(x + w).toFixed(1)} ${(y + rad).toFixed(1)} V ${(y + h - rad).toFixed(1)} A ${rad.toFixed(1)} ${rad.toFixed(1)} 0 0 1 ${(x + w - rad).toFixed(1)} ${(y + h).toFixed(1)} H ${(x + rad).toFixed(1)} A ${rad.toFixed(1)} ${rad.toFixed(1)} 0 0 1 ${x.toFixed(1)} ${(y + h - rad).toFixed(1)} V ${(y + rad).toFixed(1)} A ${rad.toFixed(1)} ${rad.toFixed(1)} 0 0 1 ${(x + rad).toFixed(1)} ${y.toFixed(1)} Z`;
-}
-
-export function buildLayerFromBoxTrajectory(
-  id: string,
-  name: string,
-  samPrompt: string,
-  colorHex: string,
-  role: string,
-  startBox: { x: number; y: number; width: number; height: number },
-  endBox: { x: number; y: number; width: number; height: number },
-  stiffness: number,
-  damping: number,
-  staggerMs: number,
-  durationMs: number,
-  numFrames = 60,
-  startTimePct = 0.0,
-  endTimePct = 1.0,
-  fallbackColorIdx = 0
-): TrackedLayer {
-  const safeColor = ensureBrightColor(colorHex, fallbackColorIdx);
-  const mass = 1.0;
-  const k = Math.max(20, Math.min(1200, stiffness || 340));
-  const c = Math.max(4, Math.min(120, damping || 22));
-  const omega0 = Number(Math.sqrt(k / mass).toFixed(2));
-  const zeta = Number((c / (2 * Math.sqrt(mass * k))).toFixed(3));
-  const overshootPct =
-    zeta < 1
-      ? Number(
-          (
-            Math.exp((-Math.PI * zeta) / Math.sqrt(1 - zeta * zeta)) * 100
-          ).toFixed(1)
-        )
-      : 0;
-  const settlingMs = Math.round(
-    Math.min(Math.max(220, durationMs || 450), (4 / Math.max(0.5, zeta * omega0)) * 1000)
-  );
-
-  const frames: FrameBox[] = [];
-  const telemetrySeries: TelemetryPoint[] = [];
-  const sPct = Math.max(0, Math.min(0.9, startTimePct));
-  const ePct = Math.max(sPct + 0.1, Math.min(1.0, endTimePct));
-
-  for (let i = 0; i < numFrames; i++) {
-    const pct = i / Math.max(1, numFrames - 1);
-    const tMs = pct * Math.max(400, durationMs);
-    const localStartMs = Math.max(staggerMs, sPct * durationMs);
-    const tau = Math.max(0, (tMs - localStartMs) / 1000);
-    const uFit = springStepScalar(tau, omega0, zeta);
-    const jitter = i > 1 && i < numFrames - 3 ? Math.sin(i * 1.7) * 0.003 : 0;
-    const uEmp = uFit + jitter;
-
-    const bx = startBox.x + (endBox.x - startBox.x) * uEmp;
-    const by = startBox.y + (endBox.y - startBox.y) * uEmp;
-    const bw = Math.max(12, startBox.width + (endBox.width - startBox.width) * uEmp);
-    const bh = Math.max(12, startBox.height + (endBox.height - startBox.height) * uEmp);
-
-    const isVisibleInFrame = pct >= sPct - 0.03 && pct <= ePct + 0.03;
-
-    frames.push({
-      frame_index: i,
-      timestamp_ms: Number(tMs.toFixed(1)),
-      x: Number(bx.toFixed(1)),
-      y: Number(by.toFixed(1)),
-      width: Number(bw.toFixed(1)),
-      height: Number(bh.toFixed(1)),
-      svg_path: roundedRectSvg(bx, by, bw, bh, 22),
-      confidence: isVisibleInFrame ? 0.98 : 0.0,
-    });
-
-    const prevTau = Math.max(0, (tMs - 16.67 - localStartMs) / 1000);
-    const uPrev = springStepScalar(prevTau, omega0, zeta);
-    const dominantSpan =
-      Math.max(
-        Math.abs(endBox.width - startBox.width),
-        Math.abs(endBox.height - startBox.height),
-        Math.abs(endBox.x - startBox.x),
-        Math.abs(endBox.y - startBox.y),
-        40
-      );
-    const vel = (uFit - uPrev) * dominantSpan * 60;
-
-    telemetrySeries.push({
-      frame: i,
-      timeMs: Number(tMs.toFixed(1)),
-      empiricalNormalized: Number(uEmp.toFixed(4)),
-      fittedSpringNormalized: Number(uFit.toFixed(4)),
-      x: Number(bx.toFixed(1)),
-      y: Number(by.toFixed(1)),
-      width: Number(bw.toFixed(1)),
-      height: Number(bh.toFixed(1)),
-      velocityPxPerSec: Number(vel.toFixed(1)),
-    });
-  }
-
-  return {
-    id,
-    name,
-    samPrompt,
-    colorHex: safeColor,
-    role,
-    frames,
-    physics: {
-      transition_type: zeta < 1.1 ? "spring" : "tween",
-      stiffness: Number(k.toFixed(1)),
-      damping: Number(c.toFixed(1)),
-      mass,
-      damping_ratio: zeta,
-      natural_freq_rad: omega0,
-      overshoot_pct: overshootPct,
-      settling_duration_ms: settlingMs,
-      stagger_delay_ms: staggerMs,
-      cubic_bezier: [
-        Number(Math.min(0.6, Math.max(0.15, 0.42 * zeta)).toFixed(2)),
-        0.0,
-        0.2,
-        Number((1 + (overshootPct / 100) * 0.45).toFixed(2)),
-      ],
-      r_squared: 0.9985,
-      dominant_axis: "scale/morph",
-      start_state: startBox,
-      end_state: endBox,
-      telemetry_series: telemetrySeries,
-    },
-  };
+function waitFor(video: HTMLVideoElement, event: string, ms: number) {
+  return new Promise<void>((resolve) => {
+    const done = () => {
+      video.removeEventListener(event, done);
+      clearTimeout(t);
+      resolve();
+    };
+    const t = setTimeout(done, ms);
+    video.addEventListener(event, done);
+  });
 }
 
 /**
- * Decodes ANY uploaded video File in the browser using a hardware-warmed <video> and <canvas>,
- * extracting 10 sequential keyframe screenshots from start to end for Muse Spark 1.3 vision analysis.
+ * MediaRecorder WebM files (Record Screen / sample video) report duration = Infinity until
+ * the decoder has scanned to the end. Seeking far past the end forces the real duration.
  */
-export async function analyzeVideoFileFramesClient(file: File): Promise<ExtractedVideoData> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const video = document.createElement("video");
-    video.src = url;
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = "auto";
-    // Mount offscreen in DOM so macOS VideoToolbox hardware decoder decodes every .mov frame reliably
-    video.style.position = "fixed";
-    video.style.left = "-9999px";
-    video.style.top = "-9999px";
-    video.style.width = "320px";
-    video.style.height = "200px";
-    video.style.opacity = "0";
-    video.style.pointerEvents = "none";
-    document.body.appendChild(video);
+async function resolveDuration(video: HTMLVideoElement): Promise<number> {
+  if (Number.isFinite(video.duration) && video.duration > 0) return video.duration;
+  video.currentTime = 1e7;
+  await waitFor(video, "durationchange", 2500);
+  await waitFor(video, "seeked", 1500);
+  const d = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : video.currentTime;
+  video.currentTime = 0;
+  await waitFor(video, "seeked", 1500);
+  return d > 0 && Number.isFinite(d) ? d : 2;
+}
 
-    const STAGE_W = 640;
-    const STAGE_H = 400;
+function describeDecodeError(file: File, video: HTMLVideoElement) {
+  const code = video.error?.code;
+  const isMov = /\.mov$/i.test(file.name) || file.type === "video/quicktime";
+  const hint = isMov
+    ? " This .mov is probably HEVC/ProRes, which this browser cannot decode — open it in Safari, or re-export as H.264 MP4 (QuickTime → File → Export As → 1080p, or `ffmpeg -i in.mov -c:v libx264 -pix_fmt yuv420p out.mp4`)."
+    : " Try re-exporting as H.264 MP4.";
+  return `Could not decode "${file.name}"${code ? ` (MediaError ${code})` : ""}.${hint}`;
+}
 
-    const cleanup = () => {
-      try {
-        if (video.parentNode) video.parentNode.removeChild(video);
-      } catch {
-        // ignore
+/** Bbox of pixels that differ from the reference frame, in 640x400 stage space. */
+function changedRegion(ref: Uint8ClampedArray, cur: Uint8ClampedArray): { box: BoxRect | null; energy: number } {
+  let minX = GRID_W;
+  let minY = GRID_H;
+  let maxX = -1;
+  let maxY = -1;
+  let energy = 0;
+  for (let y = 0; y < GRID_H; y++) {
+    for (let x = 0; x < GRID_W; x++) {
+      const i = (y * GRID_W + x) * 4;
+      const d =
+        (Math.abs(cur[i] - ref[i]) + Math.abs(cur[i + 1] - ref[i + 1]) + Math.abs(cur[i + 2] - ref[i + 2])) / 3;
+      energy += d;
+      if (d > 28) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
       }
-      URL.revokeObjectURL(url);
-    };
+    }
+  }
+  const sx = STAGE_W / GRID_W;
+  const sy = STAGE_H / GRID_H;
+  const box =
+    maxX >= minX && (maxX - minX + 1) * (maxY - minY + 1) >= 4
+      ? { x: minX * sx, y: minY * sy, width: (maxX - minX + 1) * sx, height: (maxY - minY + 1) * sy }
+      : null;
+  return { box, energy: energy / (GRID_W * GRID_H) };
+}
 
-    video.onloadeddata = async () => {
-      try {
-        // Warm up decoder
-        try {
-          await video.play();
-          video.pause();
-        } catch {
-          // ignore autoplay block if any
-        }
-
-        const rawDuration =
-          Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 2.0;
-        const durationSec = Math.min(12.0, Math.max(0.4, rawDuration));
-        const numFrames = 60;
-        const fps = Number((numFrames / durationSec).toFixed(1));
-        const durationMs = Math.round(durationSec * 1000);
-
-        const canvas = document.createElement("canvas");
-        canvas.width = STAGE_W;
-        canvas.height = STAGE_H;
-        const ctx = canvas.getContext("2d", { willReadFrequently: true });
-        if (!ctx) throw new Error("Canvas 2D context unavailable");
-
-        const keyframesDataUrls: string[] = [];
-        // Sample 10 keyframes across the entire timeline from 2% to 96%
-        const sampleFractions = [0.02, 0.12, 0.22, 0.32, 0.42, 0.52, 0.64, 0.76, 0.88, 0.96];
-
-        const seekTo = (timeSec: number) =>
-          new Promise<void>((resSeek) => {
-            const target = Math.min(
-              Math.max(0.01, durationSec - 0.02),
-              Math.max(0.01, timeSec)
-            );
-            let resolved = false;
-            const finish = () => {
-              if (resolved) return;
-              resolved = true;
-              video.removeEventListener("seeked", onSeeked);
-              requestAnimationFrame(() => {
-                setTimeout(() => resSeek(), 50);
-              });
-            };
-            const onSeeked = () => finish();
-            video.addEventListener("seeked", onSeeked);
-            video.currentTime = target;
-            setTimeout(finish, 600);
-          });
-
-        for (const frac of sampleFractions) {
-          await seekTo(frac * durationSec);
-          ctx.drawImage(video, 0, 0, STAGE_W, STAGE_H);
-          keyframesDataUrls.push(canvas.toDataURL("image/jpeg", 0.82));
-        }
-
-        const defaultLayers: TrackedLayer[] = [
-          buildLayerFromBoxTrajectory(
-            "layer-1",
-            "Primary Animated Container",
-            "central animated UI container",
-            "#06b6d4",
-            "container",
-            { x: 185, y: 55, width: 270, height: 280 },
-            { x: 175, y: 45, width: 290, height: 300 },
-            360,
-            22,
-            0,
-            durationMs,
-            60,
-            0.0,
-            1.0,
-            0
-          ),
-          buildLayerFromBoxTrajectory(
-            "layer-2",
-            "Part 1 Initial Graphic",
-            "first stage animated icon or graphic",
-            "#10b981",
-            "media",
-            { x: 245, y: 120, width: 150, height: 150 },
-            { x: 235, y: 110, width: 170, height: 170 },
-            410,
-            20,
-            20,
-            durationMs,
-            60,
-            0.0,
-            0.55,
-            1
-          ),
-        ];
-
-        resolve({
-          fps,
-          frameCount: numFrames,
-          width: STAGE_W,
-          height: STAGE_H,
-          durationMs,
-          keyframesDataUrls,
-          layers: defaultLayers,
-        });
-      } catch (err) {
-        reject(err);
-      } finally {
-        cleanup();
-      }
-    };
-
-    video.onerror = () => {
-      cleanup();
-      reject(new Error("Could not decode video file in browser."));
-    };
+/**
+ * Decodes an uploaded video in the browser, samples 30 uniformly spaced frames, keeps 10 as
+ * JPEG keyframes for Muse Spark 1.3 / SAM 3.1, and measures a pixel-diff motion envelope
+ * whose energy curve gives a model-free spring fit for the clip's global timing.
+ */
+export async function analyzeVideoFileFramesClient(
+  file: File,
+  onProgress?: (msg: string) => void
+): Promise<ExtractedVideoData> {
+  const url = URL.createObjectURL(file);
+  const video = document.createElement("video");
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = "auto";
+  // Kept in the DOM (offscreen) so hardware decoders deliver frames reliably.
+  Object.assign(video.style, {
+    position: "fixed",
+    left: "-9999px",
+    top: "-9999px",
+    width: "320px",
+    height: "200px",
+    opacity: "0",
+    pointerEvents: "none",
   });
+  document.body.appendChild(video);
+
+  try {
+    await withTimeout(
+      new Promise<void>((resolve, reject) => {
+        video.onloadeddata = () => resolve();
+        video.onerror = () => reject(new Error(describeDecodeError(file, video)));
+        video.src = url;
+      }),
+      DECODE_TIMEOUT_MS,
+      `Timed out decoding "${file.name}". ${/\.mov$/i.test(file.name) ? "HEVC/ProRes .mov files need Safari or an H.264 re-export." : "Try an H.264 MP4."}`
+    );
+    if (!video.videoWidth || !video.videoHeight) throw new Error(`"${file.name}" has no video track.`);
+
+    try {
+      await video.play();
+      video.pause();
+    } catch {
+      // Autoplay may be blocked; seeking still works.
+    }
+
+    const durationSec = Math.min(20, Math.max(0.3, await resolveDuration(video)));
+    const durationMs = Math.round(durationSec * 1000);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = STAGE_W;
+    canvas.height = STAGE_H;
+    const ctx = canvas.getContext("2d");
+    const grid = document.createElement("canvas");
+    grid.width = GRID_W;
+    grid.height = GRID_H;
+    const gctx = grid.getContext("2d", { willReadFrequently: true });
+    if (!ctx || !gctx) throw new Error("Canvas 2D context unavailable");
+
+    const seekTo = async (timeSec: number) => {
+      const target = Math.min(Math.max(0, durationSec - 0.03), Math.max(0, timeSec));
+      if (Math.abs(video.currentTime - target) < 1e-3) return;
+      const seeked = waitFor(video, "seeked", 1500);
+      video.currentTime = target;
+      await seeked;
+      // Let the decoded frame reach the compositor; rAF is paused in background tabs, so race it.
+      await new Promise((r) => {
+        requestAnimationFrame(() => r(null));
+        setTimeout(r, 60);
+      });
+    };
+
+    const keyIdx = new Set(
+      Array.from({ length: NUM_KEYFRAMES }, (_, i) => Math.round((i * (NUM_SAMPLES - 1)) / (NUM_KEYFRAMES - 1)))
+    );
+    const keyframesDataUrls: string[] = [];
+    const keyframeTimesMs: number[] = [];
+    const motionTrack: TrackSample[] = [];
+    const energy: { tMs: number; u: number }[] = [];
+    let ref: Uint8ClampedArray | null = null;
+
+    for (let i = 0; i < NUM_SAMPLES; i++) {
+      const tSec = (i / (NUM_SAMPLES - 1)) * durationSec;
+      await seekTo(tSec);
+      ctx.drawImage(video, 0, 0, STAGE_W, STAGE_H);
+      gctx.drawImage(canvas, 0, 0, GRID_W, GRID_H);
+      const px = gctx.getImageData(0, 0, GRID_W, GRID_H).data;
+      if (!ref) ref = new Uint8ClampedArray(px);
+      const { box, energy: e } = changedRegion(ref, px);
+      const tMs = Math.round(tSec * 1000);
+      motionTrack.push({ tMs, box, source: "pixel" });
+      energy.push({ tMs, u: e });
+      if (keyIdx.has(i)) {
+        keyframesDataUrls.push(canvas.toDataURL("image/jpeg", 0.82));
+        keyframeTimesMs.push(tMs);
+      }
+      if (i % 6 === 5) onProgress?.(`Decoded ${i + 1}/${NUM_SAMPLES} frames…`);
+    }
+
+    // Model-free timing: normalized pixel-energy curve → spring fit.
+    const normalized = normalizeTransition(energy);
+    const globalFit = normalized.length >= 4 ? { fit: fitSpring(normalized), samples: normalized } : null;
+
+    // The envelope starts at the first moving frame; frame 0 itself has no diff.
+    const firstMoving = motionTrack.findIndex((s) => s.box);
+    const envelopeTrack =
+      firstMoving > 0 ? [{ ...motionTrack[firstMoving], tMs: 0 }, ...motionTrack.slice(1)] : motionTrack;
+    const layers = envelopeTrack.some((s) => s.box)
+      ? [
+          buildMeasuredLayer(
+            {
+              id: "layer-1",
+              name: "Motion Envelope (pixel diff)",
+              samPrompt: "moving UI region",
+              colorHex: "#06b6d4",
+              role: "container",
+              cornerRadius: 10,
+              track: envelopeTrack,
+            },
+            durationMs,
+            globalFit
+          ),
+        ]
+      : [];
+
+    return {
+      fps: Number((NUM_SAMPLES / durationSec).toFixed(1)),
+      frameCount: NUM_SAMPLES,
+      width: STAGE_W,
+      height: STAGE_H,
+      durationMs,
+      keyframesDataUrls,
+      keyframeTimesMs,
+      motionTrack,
+      globalFit,
+      layers,
+    };
+  } finally {
+    video.removeAttribute("src");
+    video.load();
+    video.remove();
+    URL.revokeObjectURL(url);
+  }
 }

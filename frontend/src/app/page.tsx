@@ -20,10 +20,33 @@ import VideoMaskStage from "@/components/VideoMaskStage";
 import TelemetryPanel from "@/components/TelemetryPanel";
 import LiveCodeSandbox from "@/components/LiveCodeSandbox";
 import { AnalysisPayload } from "@/types/motion";
+import type { PipelineEvent, StageId } from "@/lib/server/metaPipeline";
 import { buildPresetAnalysisLocal, springStepScalar } from "@/lib/localPhysicsEngine";
 import { analyzeVideoFileFramesClient } from "@/lib/videoFrameAnalyzer";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
+
+const STAGES: { id: StageId | "decode"; label: string }[] = [
+  { id: "decode", label: "Decode 30 frames + pixel-motion envelope (browser)" },
+  { id: "muse-detect", label: "Muse Spark 1.3 · multi-frame layer & phase reasoning" },
+  { id: "sam-track", label: "SAM 3.1 · per-keyframe concept segmentation" },
+  { id: "spring-fit", label: "Inverse spring fit · Levenberg–Marquardt" },
+  { id: "muse-synth", label: "Muse Spark 1.3 · grounded 60fps code synthesis" },
+  { id: "self-heal", label: "Self-heal · lint + JS parse + repair pass" },
+];
+
+type StageState = { status: "pending" | "start" | "done" | "warn"; message?: string };
+
+function pickRecorderMime() {
+  const options = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"];
+  return options.find((m) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(m)) || "";
+}
+
+function recordingFile(chunks: BlobPart[], mime: string, base: string) {
+  const type = (mime || "video/webm").split(";")[0];
+  const ext = type.includes("mp4") ? "mp4" : "webm";
+  return new File([new Blob(chunks, { type })], `${base}.${ext}`, { type });
+}
 
 const EXAMPLE_CLIPS = [
   { id: "dynamic-island", label: "Example: Dynamic Island Music Player" },
@@ -42,6 +65,9 @@ export default function MotionCloneStudioPage() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [statusBanner, setStatusBanner] = useState<string | null>(null);
   const [showMathDrawer, setShowMathDrawer] = useState<boolean>(false);
+  const [stages, setStages] = useState<Record<string, StageState>>({});
+  const requestSeqRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string | null>(null);
   const [lastUploadedFile, setLastUploadedFile] = useState<File | null>(null);
@@ -52,10 +78,15 @@ export default function MotionCloneStudioPage() {
   const [showKeyModal, setShowKeyModal] = useState<boolean>(false);
   const [apiKey, setApiKey] = useState<string>("");
   const [customPrompts, setCustomPrompts] = useState<string>("");
+  const [serverKey, setServerKey] = useState<boolean>(false);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("motionclone_meta_api_key");
     if (saved) setApiKey(saved);
+    fetch(`${API_BASE_URL}/api/analyze-video`)
+      .then((r) => r.json())
+      .then((d) => setServerKey(!!d.serverKeyConfigured))
+      .catch(() => {});
   }, []);
 
   const saveApiKey = (val: string) => {
@@ -63,18 +94,21 @@ export default function MotionCloneStudioPage() {
     window.localStorage.setItem("motionclone_meta_api_key", val);
   };
 
-  const fetchPreset = async (presetId: string) => {
-    setUploadedVideoUrl(null);
+  const fetchPreset = (presetId: string) => {
+    abortRef.current?.abort();
+    requestSeqRef.current++;
+    setIsLoading(false);
+    setActivePresetId(presetId);
+    setUploadedVideoUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
     setLastUploadedFile(null);
     const instantData = buildPresetAnalysisLocal(presetId);
     setAnalysis(instantData);
     setSelectedLayerId(instantData.layers[0]?.id || "layer-1");
     setCurrentFrame(0);
   };
-
-  useEffect(() => {
-    fetchPreset(activePresetId);
-  }, [activePresetId]);
 
   const handleVideoFileUpload = async (file: File, overrideKey?: string) => {
     setLastUploadedFile(file);
@@ -83,76 +117,107 @@ export default function MotionCloneStudioPage() {
       return URL.createObjectURL(file);
     });
 
+    // An empty key is fine when the server has MODEL_API_KEY; otherwise it answers MISSING_API_KEY.
     const activeKey = (overrideKey ?? apiKey).trim();
-    if (!activeKey) {
-      setStatusBanner(
-        `⚠️ Please paste your Meta API Key in the popup so Muse Spark 1.3 & SAM 3.1 can analyze "${file.name}"!`
-      );
-      setShowKeyModal(true);
-      return;
-    }
+
+    // A newer upload supersedes any in-flight analysis.
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const seq = ++requestSeqRef.current;
+    const isCurrent = () => seq === requestSeqRef.current;
+    const setStage = (id: string, st: StageState) =>
+      isCurrent() && setStages((prev) => ({ ...prev, [id]: st }));
 
     setIsLoading(true);
-    setStatusBanner(
-      `Step 1/2: Sampling 10 sequential keyframes across "${file.name}"...`
-    );
+    setStages({ decode: { status: "start", message: `Decoding "${file.name}"…` } });
+    setStatusBanner(`Analyzing "${file.name}"…`);
 
     try {
-      const extracted = await analyzeVideoFileFramesClient(file);
-      setStatusBanner(
-        `Step 2/2: Meta Muse Spark 1.3 & SAM 3.1 are inspecting your video frames and building a custom interactive clone...`
+      const extracted = await analyzeVideoFileFramesClient(file, (msg) =>
+        setStage("decode", { status: "start", message: msg })
       );
-
-      const formData = new FormData();
-      formData.append("video", file);
-      formData.append(
-        "client_telemetry",
-        JSON.stringify({
-          fps: extracted.fps,
-          frameCount: extracted.frameCount,
-          width: extracted.width,
-          height: extracted.height,
-          durationMs: extracted.durationMs,
-          layers: extracted.layers,
-        })
-      );
-      formData.append(
-        "keyframes_json",
-        JSON.stringify(extracted.keyframesDataUrls || [])
-      );
-      if (customPrompts.trim()) {
-        formData.append("custom_prompts", customPrompts.trim());
-      }
-      formData.append("api_key", activeKey);
+      if (!isCurrent()) return;
+      setStage("decode", {
+        status: "done",
+        message: `${extracted.keyframesDataUrls.length} keyframes over ${(extracted.durationMs / 1000).toFixed(2)}s${
+          extracted.globalFit
+            ? ` · pixel-motion fit ζ=${extracted.globalFit.fit.zeta}, R²=${extracted.globalFit.fit.rSquared}`
+            : ""
+        }`,
+      });
 
       const res = await fetch(`${API_BASE_URL}/api/analyze-video`, {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          fileName: file.name,
+          durationMs: extracted.durationMs,
+          keyframes: extracted.keyframesDataUrls,
+          keyframeTimesMs: extracted.keyframeTimesMs,
+          motionTrack: extracted.motionTrack,
+          globalFit: extracted.globalFit,
+          customPrompts: customPrompts.trim(),
+          apiKey: activeKey,
+        }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        setStatusBanner(
-          `⚠️ ${data.message || "Meta API Error — please verify your API key."}`
-        );
-        if (data.error === "MISSING_API_KEY") {
-          setShowKeyModal(true);
-        }
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}));
+        if (!isCurrent()) return;
+        setStatusBanner(`⚠️ ${data.message || `Analysis failed (HTTP ${res.status}).`}`);
+        if (data.error === "MISSING_API_KEY") setShowKeyModal(true);
         return;
       }
 
-      setAnalysis(data);
-      setSelectedLayerId(data.layers[0]?.id || "layer-1");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let result: AnalysisPayload | null = null;
+      let failure: { error?: string; message?: string } | null = null;
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = buffer.indexOf("\n")) >= 0) {
+          const line = buffer.slice(0, nl).trim();
+          buffer = buffer.slice(nl + 1);
+          if (!line) continue;
+          const evt = JSON.parse(line) as
+            | PipelineEvent
+            | { type: "result"; data: AnalysisPayload }
+            | { type: "error"; error: string; message: string };
+          if (evt.type === "stage") setStage(evt.stage, { status: evt.status, message: evt.message });
+          else if (evt.type === "result") result = evt.data;
+          else if (evt.type === "error") failure = evt;
+        }
+      }
+      if (!isCurrent()) return;
+
+      if (failure || !result) {
+        setStatusBanner(`⚠️ ${failure?.message || "The analysis stream ended without a result."}`);
+        if (failure?.error === "INVALID_API_KEY") setShowKeyModal(true);
+        return;
+      }
+      if (!result.layers.length) {
+        result.layers = extracted.layers;
+      }
+      setAnalysis(result);
+      setSelectedLayerId(result.layers[0]?.id || "layer-1");
       setCurrentFrame(0);
+      const agree = result.crossModelAgreement;
       setStatusBanner(
-        `✨ Meta Muse Spark 1.3 + SAM 3.1 identified "${data.interactionTitle}" and built your custom interactive clone on the right!`
+        `✨ "${result.interactionTitle}" cloned — ${result.layers.length} layers${
+          agree ? ` · SAM↔Muse IoU ${agree.meanIoU.toFixed(2)}` : ""
+        }${result.selfHeal?.repaired ? " · self-healed" : ""}`
       );
     } catch (err) {
-      setStatusBanner(
-        `Error analyzing video: ${String(err).slice(0, 120)}`
-      );
+      if (!isCurrent() || (err as Error).name === "AbortError") return;
+      setStatusBanner(`⚠️ ${String((err as Error).message || err).slice(0, 300)}`);
     } finally {
-      setIsLoading(false);
+      if (isCurrent()) setIsLoading(false);
     }
   };
 
@@ -167,29 +232,24 @@ export default function MotionCloneStudioPage() {
     if (!ctx) return;
 
     const stream = canvas.captureStream(60);
-    const recorder = new MediaRecorder(stream, {
-      mimeType: MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-        ? "video/webm;codecs=vp9"
-        : "video/webm",
-    });
+    const mime = pickRecorderMime();
+    const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
     const chunks: BlobPart[] = [];
     recorder.ondataavailable = (e) => {
       if (e.data.size > 0) chunks.push(e.data);
     };
 
     recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: "video/webm" });
-      const file = new File([blob], "notification-toast-animation.webm", {
-        type: "video/webm",
-      });
-      handleVideoFileUpload(file);
+      stream.getTracks().forEach((t) => t.stop());
+      handleVideoFileUpload(recordingFile(chunks, recorder.mimeType || mime, "notification-toast-animation"));
     };
 
     recorder.start();
 
-    const totalFrames = 45;
+    // 0.3s hold, then a 1.2s spring expansion, so the clip has a measurable onset.
+    const totalFrames = 90;
     for (let f = 0; f < totalFrames; f++) {
-      const tau = f / 42;
+      const tau = Math.max(0, (f - 18) / 60);
       const u = springStepScalar(tau, 19.5, 0.58);
 
       ctx.fillStyle = "#050811";
@@ -238,46 +298,51 @@ export default function MotionCloneStudioPage() {
         ctx.fillText("Accept Video Call", bx + bw / 2 - 55, by + 23);
       }
 
-      await new Promise((r) => setTimeout(r, 15));
+      await new Promise((r) => setTimeout(r, 1000 / 60));
     }
 
     recorder.stop();
   };
 
   const startBrowserScreenRecording = async () => {
+    let stream: MediaStream;
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({
+      stream = await navigator.mediaDevices.getDisplayMedia({
         video: { frameRate: 60 },
         audio: false,
       });
-      const chunks: BlobPart[] = [];
-      const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-      setIsRecordingScreen(true);
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-
-      recorder.onstop = () => {
-        setIsRecordingScreen(false);
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunks, { type: "video/webm" });
-        const file = new File([blob], "screen-recording.webm", {
-          type: "video/webm",
-        });
-        handleVideoFileUpload(file);
-      };
-
-      recorder.start();
-      setTimeout(() => {
-        if (recorder.state === "recording") {
-          recorder.stop();
-        }
-      }, 4500);
     } catch {
-      setIsRecordingScreen(false);
+      setStatusBanner("Screen recording was cancelled or blocked by the browser.");
+      return;
     }
+    const chunks: BlobPart[] = [];
+    const mime = pickRecorderMime();
+    const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    mediaRecorderRef.current = recorder;
+    setIsRecordingScreen(true);
+    setStatusBanner("● Recording 4s — play the animation you want to clone now…");
+
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+    recorder.onstop = () => {
+      setIsRecordingScreen(false);
+      stream.getTracks().forEach((t) => t.stop());
+      if (!chunks.length) {
+        setStatusBanner("Recording captured no frames — try again.");
+        return;
+      }
+      handleVideoFileUpload(recordingFile(chunks, recorder.mimeType || mime, "screen-recording"));
+    };
+    // The browser's own "Stop sharing" button ends the track, not the recorder.
+    stream.getVideoTracks()[0]?.addEventListener("ended", () => {
+      if (recorder.state === "recording") recorder.stop();
+    });
+
+    recorder.start(250);
+    setTimeout(() => {
+      if (recorder.state === "recording") recorder.stop();
+    }, 4000);
   };
 
   const stopBrowserScreenRecording = () => {
@@ -342,6 +407,7 @@ export default function MotionCloneStudioPage() {
             {lastUploadedFile && (
               <button
                 onClick={() => handleVideoFileUpload(lastUploadedFile)}
+                disabled={isLoading}
                 className="px-3.5 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-bold flex items-center gap-1.5 transition"
                 title="Re-run Muse Spark 1.3 & SAM 3.1 on the current video"
               >
@@ -370,6 +436,7 @@ export default function MotionCloneStudioPage() {
 
             <button
               onClick={synthesizeAndIngestSampleVideo}
+              disabled={isLoading}
               className="px-3 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 text-xs font-medium flex items-center gap-1.5 transition"
             >
               <Film className="w-3.5 h-3.5" />
@@ -379,9 +446,7 @@ export default function MotionCloneStudioPage() {
             <select
               value={uploadedVideoUrl ? "custom" : activePresetId}
               onChange={(e) => {
-                if (e.target.value !== "custom") {
-                  setActivePresetId(e.target.value);
-                }
+                if (e.target.value !== "custom") fetchPreset(e.target.value);
               }}
               className="bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded-xl px-2.5 py-2 focus:outline-none focus:border-cyan-500"
             >
@@ -398,13 +463,13 @@ export default function MotionCloneStudioPage() {
             <button
               onClick={() => setShowKeyModal(true)}
               className={`px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition ${
-                apiKey
+                apiKey || serverKey
                   ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40"
                   : "bg-amber-500 text-slate-950 border-amber-400 font-bold animate-pulse"
               }`}
             >
               <KeyRound className="w-3.5 h-3.5" />
-              {apiKey ? "Meta API Ready" : "Set Meta API Key"}
+              {apiKey ? "Meta API Ready" : serverKey ? "Meta API Ready (server key)" : "Set Meta API Key"}
             </button>
           </div>
         </div>
@@ -429,14 +494,52 @@ export default function MotionCloneStudioPage() {
       {/* Main Side-by-Side Workspace */}
       <main className="flex-1 max-w-[1560px] w-full mx-auto p-4 space-y-4">
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center min-h-[480px] gap-4 bg-[#090d18] border border-slate-800 rounded-2xl p-8 text-center">
-            <Loader2 className="w-10 h-10 text-cyan-400 animate-spin" />
-            <h3 className="text-lg font-bold text-white">
-              Meta Muse Spark 1.3 & SAM 3.1 Are Analyzing Your Video...
-            </h3>
-            <p className="text-xs text-slate-300 max-w-lg leading-relaxed">
-              Inspecting 10 sequential keyframes from your video, locating moving UI elements and icons, extracting spring speed/bounce, and building a custom interactive HTML/SVG/Tailwind + React Framer Motion clone.
-            </p>
+          <div className="flex flex-col items-center justify-center min-h-[480px] gap-5 bg-[#090d18] border border-slate-800 rounded-2xl p-8">
+            <div className="flex items-center gap-3">
+              <Loader2 className="w-7 h-7 text-cyan-400 animate-spin" />
+              <h3 className="text-lg font-bold text-white">
+                Closed-loop pipeline running: SAM 3.1 ⇄ Muse Spark 1.3
+              </h3>
+            </div>
+            <ol className="w-full max-w-2xl space-y-2">
+              {STAGES.map((st, i) => {
+                const state = stages[st.id]?.status ?? "pending";
+                return (
+                  <li
+                    key={st.id}
+                    className={`flex items-start gap-3 px-3 py-2 rounded-xl border text-xs ${
+                      state === "start"
+                        ? "border-cyan-500/50 bg-cyan-950/30"
+                        : state === "done"
+                        ? "border-emerald-600/40 bg-emerald-950/20"
+                        : state === "warn"
+                        ? "border-amber-500/40 bg-amber-950/20"
+                        : "border-slate-800 bg-slate-950/40 opacity-60"
+                    }`}
+                  >
+                    <span className="mt-0.5 w-5 shrink-0 text-center font-mono">
+                      {state === "start" ? (
+                        <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />
+                      ) : state === "done" ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      ) : state === "warn" ? (
+                        "⚠️"
+                      ) : (
+                        <span className="text-slate-500">{i + 1}</span>
+                      )}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-slate-100">{st.label}</div>
+                      {stages[st.id]?.message && (
+                        <div className="text-slate-400 font-mono break-words mt-0.5">
+                          {stages[st.id]?.message}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
           </div>
         ) : (
           <>
@@ -489,6 +592,10 @@ export default function MotionCloneStudioPage() {
                     layer={selectedLayer}
                     currentFrame={currentFrame}
                     setCurrentFrame={setCurrentFrame}
+                    timeMs={
+                      selectedLayer.frames[currentFrame]?.timestamp_ms ??
+                      (currentFrame / 59) * analysis.videoMeta.durationMs
+                    }
                   />
                 </div>
               )}

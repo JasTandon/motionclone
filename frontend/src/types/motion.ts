@@ -39,6 +39,22 @@ export interface SpringPhysics {
   telemetry_series: TelemetryPoint[];
 }
 
+export interface BoxRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** One measured observation of a layer at a sampled keyframe. */
+export interface TrackSample {
+  tMs: number;
+  box: BoxRect | null;
+  source: "sam" | "muse" | "pixel";
+  /** SAM 3.1 mask outline (SVG path in 640x400 stage space), when returned. */
+  maskPath?: string;
+}
+
 export interface TrackedLayer {
   id: string;
   name: string;
@@ -47,6 +63,9 @@ export interface TrackedLayer {
   role: string;
   physics: SpringPhysics;
   frames: FrameBox[];
+  track?: TrackSample[];
+  /** Human-readable provenance of the spring fit, e.g. "SAM 3.1 ×7 + Muse ×3". */
+  fitSource?: string;
 }
 
 export interface AnalysisPayload {
@@ -61,6 +80,12 @@ export interface AnalysisPayload {
     durationMs: number;
   };
   usedLiveMetaApi?: boolean;
+  /** True for built-in examples whose telemetry is synthetic reference data. */
+  isExample?: boolean;
+  sceneBackgroundHex?: string;
+  /** Mean IoU between SAM 3.1 boxes and Muse Spark 1.3 boxes on the same keyframes. */
+  crossModelAgreement?: { meanIoU: number; pairs: number } | null;
+  selfHeal?: { issuesFound: string[]; repaired: boolean } | null;
   pipelineLogs?: string[];
   pipelineMetadata: {
     perceptionModel: string;

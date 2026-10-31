@@ -1,4 +1,5 @@
 import { AnalysisPayload, FrameBox, SpringPhysics, TrackedLayer, VerificationResult } from "@/types/motion";
+import { fitSpring } from "./springFit";
 
 export function springStepScalar(tau: number, omega0: number, zeta: number): number {
   const t = Math.max(0, tau);
@@ -255,6 +256,11 @@ export function buildPresetAnalysisLocal(presetId: string): AnalysisPayload {
       });
     }
 
+    // Real R² of the reference curve against its (synthetic, jittered) samples.
+    const meanEmp = telemetrySeries.reduce((a, p) => a + p.empiricalNormalized, 0) / telemetrySeries.length;
+    const ssTot = telemetrySeries.reduce((a, p) => a + (p.empiricalNormalized - meanEmp) ** 2, 0);
+    const ssRes = telemetrySeries.reduce((a, p) => a + (p.empiricalNormalized - p.fittedSpringNormalized) ** 2, 0);
+
     const physics: SpringPhysics = {
       transition_type: "spring",
       stiffness,
@@ -266,7 +272,7 @@ export function buildPresetAnalysisLocal(presetId: string): AnalysisPayload {
       settling_duration_ms: settlingMs,
       stagger_delay_ms: raw.staggerMs,
       cubic_bezier: [0.24, 0.0, 0.2, Number((1 + overshootPct / 200).toFixed(2))],
-      r_squared: 0.9994,
+      r_squared: Number((1 - ssRes / Math.max(1e-9, ssTot)).toFixed(4)),
       dominant_axis: "width",
       start_state: raw.startBox,
       end_state: raw.endBox,
@@ -383,13 +389,14 @@ struct ClonedMotionView: View {
 
   return {
     presetId: spec.id,
+    isExample: true,
     interactionTitle: spec.title,
-    interactionSummary: spec.summary,
+    interactionSummary: `${spec.summary} (Built-in example with synthetic reference telemetry — upload a video for measured data.)`,
     videoMeta: { fps: 60, frameCount: 60, width: 640, height: 400, durationMs: 1000 },
     pipelineMetadata: {
       perceptionModel: "sam-3.1",
       reasoningModel: "muse-spark-1.3",
-      physicsSolver: "Harmonic Oscillator Solver (Levenberg-Marquardt)",
+      physicsSolver: "Damped harmonic oscillator, Levenberg–Marquardt (in-browser)",
       framesAnalyzed: 60,
     },
     layers: layersOut,
@@ -425,9 +432,27 @@ export function verifyTrajectoryLocal(
 
   const rmse = Math.sqrt(sqSum / Math.max(1, comparisonSeries.length));
   const fidelity = Number(
-    Math.max(0, Math.min(99.8, (1 - rmse) * 100)).toFixed(1)
+    Math.max(0, Math.min(99.9, (1 - rmse) * 100)).toFixed(1)
   );
   const passed = fidelity >= 95.0;
+
+  // Self-heal: re-run the LM solver against the measured samples, seeded from the candidate.
+  let recommendedPatch: VerificationResult["recommendedPatch"] = null;
+  if (!passed) {
+    const refit = fitSpring(
+      layer.physics.telemetry_series.map((pt) => ({ tMs: pt.timeMs, u: pt.empiricalNormalized })),
+      { omega0: genW0, zeta: genZeta, onsetMs: layer.physics.stagger_delay_ms }
+    );
+    const useRefit = refit.samples >= 3 && refit.rmse < rmse;
+    const k = useRefit ? refit.stiffness : layer.physics.stiffness;
+    const c = useRefit ? refit.damping : layer.physics.damping;
+    recommendedPatch = {
+      stiffness: Number((k * candMass).toFixed(1)),
+      damping: Number((c * candMass).toFixed(2)),
+      mass: candMass,
+      reason: `Candidate spring (k=${candStiffness}, c=${candDamping}, m=${candMass}) deviates from the measured track by RMSE=${rmse.toFixed(3)}. Levenberg–Marquardt refit (${refit.iterations} iterations, ${refit.samples} samples) recovers k=${(k * candMass).toFixed(1)}, c=${(c * candMass).toFixed(2)}${useRefit ? ` with RMSE=${refit.rmse.toFixed(3)}` : ""}.`,
+    };
+  }
 
   return {
     fidelityScorePct: fidelity,
@@ -446,14 +471,7 @@ export function verifyTrajectoryLocal(
       damping: candDamping,
       mass: candMass,
     },
-    recommendedPatch: !passed
-      ? {
-          stiffness: layer.physics.stiffness,
-          damping: layer.physics.damping,
-          mass: layer.physics.mass,
-          reason: `Candidate trajectory (k=${candStiffness}, c=${candDamping}) deviated from SAM 3.1 empirical mask track by RMSE=${rmse.toFixed(3)}. Auto-patching Framer Motion spring to k=${layer.physics.stiffness}, c=${layer.physics.damping}.`,
-        }
-      : null,
+    recommendedPatch,
     comparisonSeries,
   };
 }

@@ -13,6 +13,19 @@ import {
 } from "lucide-react";
 import { AnalysisPayload, TrackedLayer } from "@/types/motion";
 
+const OVERLAY_PALETTE = ["#06b6d4", "#a855f7", "#10b981", "#f59e0b"];
+
+/** Layer colors are the element's real color; overlays need a color that reads on any video. */
+function overlayColor(hex: string, idx: number) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return OVERLAY_PALETTE[idx % OVERLAY_PALETTE.length];
+  const v = parseInt(m[1], 16);
+  const [r, g, b] = [(v >> 16) & 255, (v >> 8) & 255, v & 255];
+  const max = Math.max(r, g, b);
+  const sat = max ? (max - Math.min(r, g, b)) / max : 0;
+  return max < 90 || (sat < 0.25 && max > 200) ? OVERLAY_PALETTE[idx % OVERLAY_PALETTE.length] : `#${m[1]}`;
+}
+
 interface VideoMaskStageProps {
   analysis: AnalysisPayload;
   currentFrame: number;
@@ -38,6 +51,9 @@ export default function VideoMaskStage({
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const totalFrames = analysis.layers[0]?.frames.length || 60;
+  // MediaRecorder WebM reports duration = Infinity; fall back to the decoded clip length.
+  const durationSec = (vid: HTMLVideoElement) =>
+    Number.isFinite(vid.duration) && vid.duration > 0 ? vid.duration : analysis.videoMeta.durationMs / 1000;
 
   useEffect(() => {
     const vid = videoRef.current;
@@ -52,12 +68,12 @@ export default function VideoMaskStage({
 
       let rafId = 0;
       const syncFromVideo = () => {
-        if (vid && Number.isFinite(vid.duration) && vid.duration > 0 && !vid.paused) {
+        if (vid && !vid.paused) {
           const nextFrame = Math.min(
             totalFrames - 1,
-            Math.max(0, Math.round((vid.currentTime / vid.duration) * (totalFrames - 1)))
+            Math.max(0, Math.round((vid.currentTime / durationSec(vid)) * (totalFrames - 1)))
           );
-          setCurrentFrame(nextFrame);
+          setCurrentFrame((prev) => (prev === nextFrame ? prev : nextFrame));
         }
         if (isPlaying) {
           rafId = requestAnimationFrame(syncFromVideo);
@@ -75,15 +91,17 @@ export default function VideoMaskStage({
       setCurrentFrame((prev) => (prev + 1) % totalFrames);
     }, intervalMs);
     return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPlaying, slowMo, totalFrames, uploadedVideoUrl, setCurrentFrame]);
 
   useEffect(() => {
     const vid = videoRef.current;
     if (!vid || !uploadedVideoUrl || isPlaying) return;
-    const duration = vid.duration;
-    if (Number.isFinite(duration) && duration > 0) {
-      vid.currentTime = (currentFrame / Math.max(1, totalFrames - 1)) * duration;
-    }
+    vid.currentTime = Math.min(
+      durationSec(vid) - 0.01,
+      (currentFrame / Math.max(1, totalFrames - 1)) * durationSec(vid)
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentFrame, totalFrames, uploadedVideoUrl, isPlaying]);
 
   const toggleLayerVisibility = (id: string, e: React.MouseEvent) => {
@@ -108,7 +126,11 @@ export default function VideoMaskStage({
               Input Video & SAM 3.1 Tracking
             </h2>
             <p className="text-xs text-slate-400">
-              SAM 3.1 outlines every moving UI piece across 60 frames
+              {analysis.isExample
+                ? "Example clip · synthetic reference tracks"
+                : analysis.crossModelAgreement
+                ? `SAM 3.1 masks + Muse Spark 1.3 tracks · IoU agreement ${analysis.crossModelAgreement.meanIoU.toFixed(2)}`
+                : "Measured layer tracks from the sampled keyframes"}
             </p>
           </div>
         </div>
@@ -166,6 +188,7 @@ export default function VideoMaskStage({
               src={uploadedVideoUrl}
               muted
               playsInline
+              onError={() => setIsPlaying(false)}
               className="absolute inset-0 w-full h-full object-fill opacity-85"
             />
           )}
@@ -198,8 +221,9 @@ export default function VideoMaskStage({
                 );
               })}
 
-            {analysis.layers.map((layer) => {
-              if (hiddenLayers[layer.id]) return null;
+            {analysis.layers.map((rawLayer, layerIdx) => {
+              if (hiddenLayers[rawLayer.id]) return null;
+              const layer = { ...rawLayer, colorHex: overlayColor(rawLayer.colorHex, layerIdx) };
               const frame = layer.frames[currentFrame] || layer.frames[0];
               if (!frame) return null;
               const isSelected = layer.id === selectedLayerId;
@@ -336,7 +360,7 @@ export default function VideoMaskStage({
         </div>
 
         <div className="grid grid-cols-1 gap-1.5 max-h-[145px] overflow-y-auto pr-1">
-          {analysis.layers.map((layer: TrackedLayer) => {
+          {analysis.layers.map((layer: TrackedLayer, layerIdx: number) => {
             const isSelected = layer.id === selectedLayerId;
             const isHidden = !!hiddenLayers[layer.id];
             return (
@@ -352,13 +376,16 @@ export default function VideoMaskStage({
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span
                     className="w-3 h-3 rounded-full shrink-0"
-                    style={{ backgroundColor: layer.colorHex }}
+                    style={{ backgroundColor: overlayColor(layer.colorHex, layerIdx) }}
                   />
                   <div className="min-w-0">
                     <div className="text-xs font-medium text-slate-100 truncate">
                       {layer.name}
                     </div>
-                    <div className="text-[11px] text-slate-400 font-mono truncate">
+                    <div
+                      className="text-[11px] text-slate-400 font-mono truncate"
+                      title={layer.fitSource}
+                    >
                       {Math.round(layer.physics.start_state.width)}×
                       {Math.round(layer.physics.start_state.height)}px →{" "}
                       {Math.round(layer.physics.end_state.width)}×
@@ -370,6 +397,7 @@ export default function VideoMaskStage({
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-[11px] font-mono text-cyan-300 bg-cyan-950/50 border border-cyan-800/50 px-2 py-0.5 rounded">
                     {layer.physics.settling_duration_ms}ms • {layer.physics.overshoot_pct}% bounce
+                    {layer.physics.r_squared > 0 ? ` • R² ${layer.physics.r_squared.toFixed(2)}` : ""}
                   </span>
                   <button
                     onClick={(e) => toggleLayerVisibility(layer.id, e)}

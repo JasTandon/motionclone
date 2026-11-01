@@ -19,7 +19,7 @@ import {
   sanitizeGeneratedHtml,
 } from "@/lib/generatedHtml";
 import { buildCssCode, buildReactFallbackCode, buildSwiftUICode } from "@/lib/codegen";
-import { findChrome, renderAndScore, VisualReport } from "./visualVerify";
+import { findChrome, renderAndScore, VisualReport, warmBrowser } from "./visualVerify";
 
 export const META_BASE_URL = (process.env.META_BASE_URL || "https://api.meta.ai/v1").replace(/\/$/, "");
 export const MUSE_MODEL_ID = process.env.MUSE_MODEL_ID || "muse-spark-1.3";
@@ -628,6 +628,7 @@ export async function runMotionClonePipeline(
   const startedAt = Date.now();
   const budgetMs = 280_000;
   const remaining = () => budgetMs - (Date.now() - startedAt);
+  warmBrowser();
   const n = input.keyframes.length;
   const times = input.keyframeTimesMs.length === n ? input.keyframeTimesMs : input.keyframes.map((_, i) => (i / Math.max(1, n - 1)) * input.durationMs);
 

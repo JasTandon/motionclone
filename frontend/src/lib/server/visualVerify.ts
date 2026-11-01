@@ -33,12 +33,26 @@ async function getBrowser(): Promise<Browser> {
   const executablePath = findChrome();
   if (!executablePath) throw new Error("No Chrome/Chromium found (set CHROME_PATH)");
   const puppeteer = (await import("puppeteer-core")).default;
-  browserPromise = puppeteer.launch({
-    executablePath,
-    headless: true,
-    args: ["--no-sandbox", "--disable-gpu", "--hide-scrollbars", "--mute-audio"],
+  // A cold Chrome start can take well over 30s (e.g. x64 Chrome under Rosetta), so allow 2 minutes
+  // and retry once before giving up.
+  const launch = () =>
+    puppeteer.launch({
+      executablePath,
+      headless: true,
+      timeout: 120_000,
+      protocolTimeout: 120_000,
+      args: ["--no-sandbox", "--disable-gpu", "--hide-scrollbars", "--mute-audio", "--no-first-run"],
+    });
+  browserPromise = launch().catch(() => launch());
+  browserPromise.catch(() => {
+    browserPromise = null;
   });
   return browserPromise;
+}
+
+/** Starts Chrome in the background so it is ready by the time the clone needs scoring. */
+export function warmBrowser() {
+  if (findChrome()) getBrowser().catch(() => {});
 }
 
 /**

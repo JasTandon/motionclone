@@ -23,6 +23,7 @@ flowchart LR
     S["② sam-3.1<br/>/v1/responses<br/>segments each concept<br/>on sampled keyframes"]
     M2["④ muse-spark-1.3<br/>grounded code synthesis"]
     M3["⑤ muse-spark-1.3<br/>self-heal repair"]
+    M4["⑦ muse-spark-1.3<br/>visual refine from<br/>worst frame pairs"]
   end
   M1 -->|samPrompt + Muse box| S
   S -->|SAM boxes / masks replace Muse boxes<br/>cross-model IoU reported| F["③ Inverse spring fit<br/>Levenberg–Marquardt<br/>ω₀, ζ, t₀ per layer + R²"]
@@ -30,7 +31,9 @@ flowchart LR
   F -->|measured tracks + fitted k, c| M2
   M2 --> L{lint + JS parse}
   L -->|issues| M3 --> L
-  L --> O["Live clone · React · SwiftUI · CSS linear()"]
+  L --> VV["⑥ Visual verify<br/>headless Chrome renders the clone<br/>at the video's timestamps → match %"]
+  VV -->|"&lt; 90%: worst pairs + measured diffs"| M4 --> VV
+  VV --> O["Live clone · React · SwiftUI · CSS linear()"]
   O -->|sliders / Auto-Fix| X[Verify: RMSE vs measured track<br/>LM refit → patched springs]
   X --> O
 ```
@@ -42,6 +45,8 @@ flowchart LR
 | ③ Identify | Levenberg–Marquardt (TypeScript, shared by server and browser) | Per-layer ω₀, ζ, onset t₀, R², RMSE, all computed from the fused tracks (no hard-coded fits) |
 | ④ Synthesize | `muse-spark-1.3` with frames + the measured table | Self-contained HTML clone that reads springs from `window.MC_SPRING`, plus a Framer Motion component that uses the fitted constants |
 | ⑤ Self-heal | Static lint + `new Function` parse, then `muse-spark-1.3` repair | Truncation, `NaN` path data, missing animation driver, and JS syntax errors are fixed before anyone sees them. Runtime errors inside the preview iframe are reported back and can be repaired in one click |
+| ⑥ Visual verify | Headless Chrome (`puppeteer-core` + your local Chrome) on a **virtual clock** | The clone is rendered at exactly the source keyframe timestamps and scored inside the content region: 0.4·SSIM + 0.6·fraction of content pixels whose colour matches. Flat backgrounds can't inflate it |
+| ⑦ Visual refine | `muse-spark-1.3` with the worst source/clone frame pairs | Muse sees side-by-side pairs plus measured diffs ("inner detail is 96×96 in the video, 64×68 in your clone; background #edf2f5 vs #e8ebf0") and rewrites the clone. The best-scoring version is kept; up to 2 rounds per run, and **Refine again** in the UI continues from the best clone so far |
 
 Every stage streams progress to the UI as NDJSON, so you can watch each model hand off to the next.
 
@@ -64,6 +69,10 @@ The critically damped and overdamped closed forms are used for ζ ≥ 1. The fit
 **Verify Match** computes RMSE between the candidate spring and the measured samples (fidelity = 1 − RMSE). **Auto-Fix** re-runs Levenberg–Marquardt, seeded from the candidate, and patches the sliders, the live preview (`window.MC_SPRING`) and all three exports at once.
 
 Sanity check: on synthetic step responses with ±1% noise, the solver recovers ω₀ and ζ to within ~2% (R² ≥ 0.9995) across underdamped, near-critical and overdamped cases.
+
+## Visual match target
+
+The UI shows the clone's visual match against your video (target 90%, configurable with `VISUAL_TARGET`), with per-frame bars. If you're not satisfied, click **Refine again**: it skips perception and synthesis and runs more refinement rounds starting from the best clone so far. **Re-Analyze Video** starts over from scratch.
 
 ## Robustness
 

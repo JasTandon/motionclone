@@ -86,6 +86,14 @@ export interface AnalysisPayload {
   /** Mean IoU between SAM 3.1 boxes and Muse Spark 1.3 boxes on the same keyframes. */
   crossModelAgreement?: { meanIoU: number; pairs: number } | null;
   selfHeal?: { issuesFound: string[]; repaired: boolean } | null;
+  /** Headless render of the clone vs. source keyframes (content region: 0.4·SSIM + 0.6·colour-match fraction). */
+  visualMatch?: {
+    score: number;
+    target: number;
+    rounds: number;
+    history: number[];
+    frames: { tMs: number; score: number }[];
+  } | null;
   pipelineLogs?: string[];
   pipelineMetadata: {
     perceptionModel: string;
@@ -132,3 +140,14 @@ export interface VerificationResult {
     errorAbs: number;
   }[];
 }
+
+export type StageId =
+  | "muse-detect"
+  | "sam-track"
+  | "spring-fit"
+  | "muse-synth"
+  | "self-heal"
+  | "visual-verify"
+  | "visual-refine";
+
+export type PipelineEvent = { type: "stage"; stage: StageId; status: "start" | "done" | "warn"; message: string };

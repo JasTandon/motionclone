@@ -21,10 +21,11 @@ const NUM_KEYFRAMES = 10;
 const GRID_W = 96;
 const GRID_H = 60;
 const DECODE_TIMEOUT_MS = 12000;
+const READ_TIMEOUT_MS = 15000;
 
-function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
+function withTimeout<T>(p: Promise<T>, ms: number, message: () => string): Promise<T> {
   return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error(message)), ms);
+    const t = setTimeout(() => reject(new Error(message())), ms);
     p.then(
       (v) => {
         clearTimeout(t);
@@ -113,7 +114,16 @@ export async function analyzeVideoFileFramesClient(
   file: File,
   onProgress?: (msg: string) => void
 ): Promise<ExtractedVideoData> {
-  const url = URL.createObjectURL(file);
+  // Copy the bytes into memory first: a picked File is read lazily from disk during decode,
+  // and files under iCloud Drive / File Provider can stall those reads indefinitely.
+  onProgress?.(`Reading "${file.name}" (${(file.size / 1024).toFixed(0)} KB)…`);
+  const bytes = await withTimeout(
+    file.arrayBuffer(),
+    READ_TIMEOUT_MS,
+    () =>
+      `Could not read "${file.name}" from disk within ${READ_TIMEOUT_MS / 1000}s. This usually means iCloud Drive is still syncing or downloading it — copy the video to a folder that isn't synced (e.g. inside motionclone.nosync) and upload that copy.`
+  );
+  const url = URL.createObjectURL(new Blob([bytes], { type: file.type || "video/mp4" }));
   const video = document.createElement("video");
   video.muted = true;
   video.playsInline = true;
@@ -133,13 +143,25 @@ export async function analyzeVideoFileFramesClient(
   try {
     await withTimeout(
       new Promise<void>((resolve, reject) => {
-        video.onloadeddata = () => resolve();
+        // Metadata is enough: the seeks below pull in frame data. Some engines never fire
+        // loadeddata for a muted offscreen <video> until playback is requested.
+        const ready = () => resolve();
+        video.addEventListener("loadedmetadata", ready, { once: true });
+        video.addEventListener("loadeddata", ready, { once: true });
+        video.addEventListener("canplay", ready, { once: true });
         video.onerror = () => reject(new Error(describeDecodeError(file, video)));
         video.src = url;
+        video.load();
+        video.play().then(() => video.pause(), () => {});
       }),
       DECODE_TIMEOUT_MS,
-      `Timed out decoding "${file.name}". ${/\.mov$/i.test(file.name) ? "HEVC/ProRes .mov files need Safari or an H.264 re-export." : "Try an H.264 MP4."}`
+      () =>
+        `Timed out decoding "${file.name}" (readyState=${video.readyState}, networkState=${video.networkState}, ${navigator.userAgent.match(/(Firefox|Edg|Chrome|Safari)\/[\d.]+/)?.[0] ?? "unknown browser"}).${/\.mov$/i.test(file.name) ? " HEVC/ProRes .mov files also need Safari or an H.264 re-export." : ""}`
     );
+    if (!video.videoWidth || !video.videoHeight) {
+      // Dimensions can lag metadata by a tick on some engines.
+      await waitFor(video, "loadeddata", 1500);
+    }
     if (!video.videoWidth || !video.videoHeight) throw new Error(`"${file.name}" has no video track.`);
 
     try {

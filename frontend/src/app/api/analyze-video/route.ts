@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { MetaApiError, PipelineInput, runMotionClonePipeline } from "@/lib/server/metaPipeline";
-import { TrackSample } from "@/types/motion";
+import { AnalysisPayload, TrackSample } from "@/types/motion";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -64,6 +64,10 @@ export async function POST(request: Request) {
     motionTrack: Array.isArray(body.motionTrack) ? (body.motionTrack as TrackSample[]).slice(0, 120) : [],
     globalFit: parseGlobalFit(body.globalFit),
     customPrompts: String(body.customPrompts || ""),
+    continueFrom:
+      body.continueFrom && typeof body.continueFrom === "object" && Array.isArray((body.continueFrom as AnalysisPayload).layers)
+        ? (body.continueFrom as AnalysisPayload)
+        : null,
   };
 
   const encoder = new TextEncoder();
@@ -77,7 +81,10 @@ export async function POST(request: Request) {
         }
       };
       try {
-        const data = await runMotionClonePipeline(input, (e) => send(e));
+        const data = await runMotionClonePipeline(input, (e) => {
+          if (e.status === "warn") console.warn(`[motionclone] ${e.stage}: ${e.message}`);
+          send(e);
+        });
         send({ type: "result", data });
       } catch (err) {
         const status = err instanceof MetaApiError ? err.status : 500;

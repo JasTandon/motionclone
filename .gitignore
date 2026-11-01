@@ -10,3 +10,4 @@ backend/uploads/
 backend/renders/
 frontend/tsconfig.tsbuildinfo
 *.tsbuildinfo
+test-videos/

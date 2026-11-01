@@ -36,6 +36,8 @@ interface LiveCodeSandboxProps {
   selectedLayer: TrackedLayer;
   apiBaseUrl: string;
   apiKey: string;
+  /** Runs another visual refinement round starting from this clone. */
+  onRefineAgain?: () => void;
 }
 
 function LiveCodeSandbox({
@@ -43,6 +45,7 @@ function LiveCodeSandbox({
   selectedLayer,
   apiBaseUrl,
   apiKey,
+  onRefineAgain,
 }: LiveCodeSandboxProps) {
   const [activeTab, setActiveTab] = useState<"preview" | "code" | "verify">(
     "preview"
@@ -555,6 +558,11 @@ function LiveCodeSandbox({
             )}
           </div>
 
+          {/* Visual match vs. the source video + "not satisfied? refine again" */}
+          {!analysis.isExample && (
+            <VisualMatchCard analysis={analysis} onRefineAgain={onRefineAgain} />
+          )}
+
           {/* Tweak Bounce & Speed Sliders */}
           <div className="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800/90 space-y-3">
             <div className="flex items-center justify-between gap-2">
@@ -871,6 +879,77 @@ function LiveCodeSandbox({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function VisualMatchCard({
+  analysis,
+  onRefineAgain,
+}: {
+  analysis: AnalysisPayload;
+  onRefineAgain?: () => void;
+}) {
+  const vm = analysis.visualMatch;
+  const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
+  const met = !!vm && vm.score >= vm.target;
+  return (
+    <div
+      className={`p-3 rounded-xl border space-y-2 ${
+        !vm ? "bg-slate-950/90 border-slate-800" : met ? "bg-emerald-950/30 border-emerald-500/40" : "bg-amber-950/30 border-amber-500/40"
+      }`}
+    >
+      {vm ? (
+        <>
+          <div className="flex items-center justify-between gap-3 text-xs">
+            <span className={`font-semibold ${met ? "text-emerald-300" : "text-amber-300"}`}>
+              Visual match vs. your video: {pct(vm.score)}
+              <span className="text-slate-400 font-normal"> · target {pct(vm.target)}</span>
+            </span>
+            {vm.history.length > 1 && (
+              <span className="font-mono text-[11px] text-slate-400 truncate">
+                {vm.history.map((h) => `${(h * 100).toFixed(0)}%`).join(" → ")}
+              </span>
+            )}
+          </div>
+          <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+            <div
+              className={`h-full rounded-full ${met ? "bg-emerald-400" : "bg-amber-400"}`}
+              style={{ width: `${Math.min(100, vm.score * 100)}%` }}
+            />
+          </div>
+          <div className="flex gap-0.5 h-3" title="Per-frame match, left to right through the clip">
+            {vm.frames.map((f) => (
+              <div
+                key={f.tMs}
+                className="flex-1 rounded-sm"
+                title={`t=${Math.round(f.tMs)}ms: ${pct(f.score)}`}
+                style={{ background: f.score >= vm.target ? "#10b981" : f.score >= 0.75 ? "#f59e0b" : "#ef4444", opacity: 0.85 }}
+              />
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="text-xs text-slate-300">Visual match not measured for this clone.</div>
+      )}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] text-slate-300 leading-snug">
+          {met
+            ? "Meets the target. You can still run another round to polish it further."
+            : "Not satisfied with the clone? Refine again — Muse Spark is shown the frames that differ most from your video and fixes them. Each round starts from the best clone so far."}
+        </p>
+        {onRefineAgain && (
+          <button
+            onClick={onRefineAgain}
+            className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition ${
+              met ? "bg-slate-800 text-slate-200 hover:bg-slate-700" : "bg-amber-400 text-slate-950 hover:bg-amber-300"
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            {met ? "Refine further" : "Refine again"}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

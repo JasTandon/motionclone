@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Upload,
   Video,
@@ -19,10 +19,9 @@ import {
 import VideoMaskStage from "@/components/VideoMaskStage";
 import TelemetryPanel from "@/components/TelemetryPanel";
 import LiveCodeSandbox from "@/components/LiveCodeSandbox";
-import { AnalysisPayload } from "@/types/motion";
-import type { PipelineEvent, StageId } from "@/lib/server/metaPipeline";
+import { AnalysisPayload, PipelineEvent, StageId } from "@/types/motion";
 import { buildPresetAnalysisLocal, springStepScalar } from "@/lib/localPhysicsEngine";
-import { analyzeVideoFileFramesClient } from "@/lib/videoFrameAnalyzer";
+import { analyzeVideoFileFramesClient, ExtractedVideoData } from "@/lib/videoFrameAnalyzer";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -33,6 +32,8 @@ const STAGES: { id: StageId | "decode"; label: string }[] = [
   { id: "spring-fit", label: "Inverse spring fit · Levenberg–Marquardt" },
   { id: "muse-synth", label: "Muse Spark 1.3 · grounded 60fps code synthesis" },
   { id: "self-heal", label: "Self-heal · lint + JS parse + repair pass" },
+  { id: "visual-verify", label: "Visual verify · render clone in headless Chrome, score vs. video frames" },
+  { id: "visual-refine", label: "Visual refine · Muse Spark fixes the worst-matching frames" },
 ];
 
 type StageState = { status: "pending" | "start" | "done" | "warn"; message?: string };
@@ -68,6 +69,7 @@ export default function MotionCloneStudioPage() {
   const [stages, setStages] = useState<Record<string, StageState>>({});
   const requestSeqRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  const extractedRef = useRef<{ file: File; data: ExtractedVideoData } | null>(null);
 
   const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string | null>(null);
   const [lastUploadedFile, setLastUploadedFile] = useState<File | null>(null);
@@ -110,7 +112,11 @@ export default function MotionCloneStudioPage() {
     setCurrentFrame(0);
   };
 
-  const handleVideoFileUpload = async (file: File, overrideKey?: string) => {
+  const handleVideoFileUpload = async (
+    file: File,
+    overrideKey?: string,
+    continueFrom?: AnalysisPayload
+  ) => {
     setLastUploadedFile(file);
     setUploadedVideoUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
@@ -129,16 +135,26 @@ export default function MotionCloneStudioPage() {
     const setStage = (id: string, st: StageState) =>
       isCurrent() && setStages((prev) => ({ ...prev, [id]: st }));
 
+    const reuse = continueFrom && extractedRef.current?.file === file ? extractedRef.current.data : null;
     setIsLoading(true);
-    setStages({ decode: { status: "start", message: `Decoding "${file.name}"…` } });
-    setStatusBanner(`Analyzing "${file.name}"…`);
+    if (reuse) {
+      const reused: StageState = { status: "done", message: "Reused from the previous run" };
+      setStages({ decode: reused, "muse-detect": reused, "sam-track": reused, "spring-fit": reused, "muse-synth": reused, "self-heal": reused });
+      setStatusBanner(`Refining the clone of "${file.name}"…`);
+    } else {
+      setStages({ decode: { status: "start", message: `Decoding "${file.name}"…` } });
+      setStatusBanner(`Analyzing "${file.name}"…`);
+    }
 
     try {
-      const extracted = await analyzeVideoFileFramesClient(file, (msg) =>
-        setStage("decode", { status: "start", message: msg })
-      );
+      const extracted =
+        reuse ??
+        (await analyzeVideoFileFramesClient(file, (msg) =>
+          setStage("decode", { status: "start", message: msg })
+        ));
       if (!isCurrent()) return;
-      setStage("decode", {
+      extractedRef.current = { file, data: extracted };
+      if (!reuse) setStage("decode", {
         status: "done",
         message: `${extracted.keyframesDataUrls.length} keyframes over ${(extracted.durationMs / 1000).toFixed(2)}s${
           extracted.globalFit
@@ -160,6 +176,7 @@ export default function MotionCloneStudioPage() {
           globalFit: extracted.globalFit,
           customPrompts: customPrompts.trim(),
           apiKey: activeKey,
+          continueFrom: reuse ? continueFrom : undefined,
         }),
       });
 
@@ -208,10 +225,11 @@ export default function MotionCloneStudioPage() {
       setSelectedLayerId(result.layers[0]?.id || "layer-1");
       setCurrentFrame(0);
       const agree = result.crossModelAgreement;
+      const vm = result.visualMatch;
       setStatusBanner(
         `✨ "${result.interactionTitle}" cloned — ${result.layers.length} layers${
           agree ? ` · SAM↔Muse IoU ${agree.meanIoU.toFixed(2)}` : ""
-        }${result.selfHeal?.repaired ? " · self-healed" : ""}`
+        }${vm ? ` · visual match ${(vm.score * 100).toFixed(1)}%` : ""}${result.selfHeal?.repaired ? " · self-healed" : ""}`
       );
     } catch (err) {
       if (!isCurrent() || (err as Error).name === "AbortError") return;
@@ -220,6 +238,13 @@ export default function MotionCloneStudioPage() {
       if (isCurrent()) setIsLoading(false);
     }
   };
+
+  // Stable callback so the memoized sandbox does not re-render on every playback frame.
+  const refineAgainRef = useRef<() => void>(() => {});
+  refineAgainRef.current = () => {
+    if (lastUploadedFile && !isLoading) handleVideoFileUpload(lastUploadedFile, undefined, analysis);
+  };
+  const onRefineAgain = useCallback(() => refineAgainRef.current(), []);
 
   const synthesizeAndIngestSampleVideo = async () => {
     setStatusBanner(
@@ -560,6 +585,7 @@ export default function MotionCloneStudioPage() {
                 selectedLayer={selectedLayer}
                 apiBaseUrl={API_BASE_URL}
                 apiKey={apiKey}
+                onRefineAgain={lastUploadedFile ? onRefineAgain : undefined}
               />
             </div>
 

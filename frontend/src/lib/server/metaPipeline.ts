@@ -9,7 +9,7 @@
  *   5. Self-heal       — static lint + JS parse of the generated document; one Muse repair pass
  */
 import fs from "fs";
-import { AnalysisPayload, BoxRect, TrackSample, TrackedLayer } from "@/types/motion";
+import { AnalysisPayload, BoxRect, PipelineEvent, TrackSample, TrackedLayer } from "@/types/motion";
 import { buildMeasuredLayer, GlobalMotionFit, iou, sanitizeBox, STAGE_H, STAGE_W } from "@/lib/trackFusion";
 import {
   buildDeterministicPreviewHtml,
@@ -19,6 +19,7 @@ import {
   sanitizeGeneratedHtml,
 } from "@/lib/generatedHtml";
 import { buildCssCode, buildReactFallbackCode, buildSwiftUICode } from "@/lib/codegen";
+import { findChrome, renderAndScore, VisualReport } from "./visualVerify";
 
 export const META_BASE_URL = (process.env.META_BASE_URL || "https://api.meta.ai/v1").replace(/\/$/, "");
 export const MUSE_MODEL_ID = process.env.MUSE_MODEL_ID || "muse-spark-1.3";
@@ -26,6 +27,10 @@ export const SAM_MODEL_ID = process.env.SAM_MODEL_ID || "sam-3.1";
 const SAM_FRAMES_PER_LAYER = Number(process.env.SAM_FRAMES_PER_LAYER || 5);
 const SAM_CONCURRENCY = Number(process.env.SAM_CONCURRENCY || 5);
 const PALETTE = ["#06b6d4", "#a855f7", "#10b981", "#f59e0b"];
+const VISUAL_TARGET = Number(process.env.VISUAL_TARGET || 0.9);
+const VISUAL_MAX_ROUNDS = Number(process.env.VISUAL_MAX_ROUNDS || 2);
+/** Variants requested in parallel per refine round (conservative, exploratory). */
+const REFINE_TEMPERATURES = [0.1, 0.5];
 
 export interface PipelineInput {
   apiKey: string;
@@ -36,10 +41,11 @@ export interface PipelineInput {
   motionTrack: TrackSample[];
   globalFit: GlobalMotionFit | null;
   customPrompts: string;
+  /** "Refine again": skip perception/synthesis and run visual refinement on this previous result. */
+  continueFrom?: AnalysisPayload | null;
 }
 
-export type StageId = "muse-detect" | "sam-track" | "spring-fit" | "muse-synth" | "self-heal";
-export type PipelineEvent = { type: "stage"; stage: StageId; status: "start" | "done" | "warn"; message: string };
+export type { PipelineEvent, StageId } from "@/types/motion";
 
 export class MetaApiError extends Error {
   constructor(public status: number, message: string) {
@@ -47,7 +53,7 @@ export class MetaApiError extends Error {
   }
 }
 
-async function metaPost(path: string, body: unknown, apiKey: string, timeoutMs: number) {
+async function metaPost(path: string, body: unknown, apiKey: string, timeoutMs: number, attempt = 0): Promise<any> {
   let resp: Response;
   try {
     resp = await fetch(`${META_BASE_URL}${path}`, {
@@ -58,9 +64,17 @@ async function metaPost(path: string, body: unknown, apiKey: string, timeoutMs: 
     });
   } catch (err) {
     const name = (err as Error).name;
+    const cause = (err as { cause?: { code?: string; message?: string } }).cause;
+    const detail = cause ? ` (${cause.code || cause.message})` : "";
+    // Up to two retries for transient network failures (not timeouts — those already spent the budget).
+    if (name !== "TimeoutError" && attempt < 2) {
+      console.warn(`[motionclone] ${path} network error${detail}; retry ${attempt + 1}/2`);
+      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+      return metaPost(path, body, apiKey, timeoutMs, attempt + 1);
+    }
     throw new MetaApiError(
       name === "TimeoutError" ? 504 : 502,
-      name === "TimeoutError" ? `Meta API ${path} timed out after ${Math.round(timeoutMs / 1000)}s` : `Could not reach Meta API: ${String(err)}`
+      name === "TimeoutError" ? `Meta API ${path} timed out after ${Math.round(timeoutMs / 1000)}s` : `Could not reach Meta API: ${String(err)}${detail}`
     );
   }
   if (!resp.ok) {
@@ -383,15 +397,19 @@ ${ARCHETYPE_TECHNIQUE[ctx.archetype] ?? ARCHETYPE_TECHNIQUE.general_ui_choreogra
 
 HARD REQUIREMENTS for the HTML document:
 1. Self-contained HTML5 (inline CSS/JS; Tailwind CDN allowed). Body background ${ctx.bg}, overflow hidden, no header text.
-   Lay the animation out in a centered 640x400 stage scaled with CSS to fit any viewport (it is shown in a ~520x325 iframe).
+   Put the animation in ONE element with id="mc-stage": a 640x400 coordinate space identical to the table above (same
+   positions, same background ${ctx.bg}), centered and scaled with a CSS transform to fit the viewport (shown in a ~520x325 iframe).
+   The clone is rendered headlessly and compared frame-by-frame with the video, so #mc-stage must look exactly like the video frame.
 2. Live physics contract: read springs from window.MC_SPRING, which the host injects and updates:
      const MC = window.MC_SPRING || { stiffness: ${layers[0]?.physics.stiffness ?? 300}, damping: ${layers[0]?.physics.damping ?? 20}, mass: 1, layers: {} };
      const springOf = (id, fallback) => (MC.layers && MC.layers[id]) || fallback;
    and evaluate motion with the analytic damped harmonic oscillator step response
      ω₀ = √(k/m), ζ = c/(2√(km)), u(t) = 1 − e^(−ζω₀t)(cos ω_d t + ζ/√(1−ζ²) sin ω_d t), ω_d = ω₀√(1−ζ²)  (critically damped when ζ ≥ 1).
    Use each layer's id from the table with springOf(...).
-3. One requestAnimationFrame loop with a function renderAt(t) over 0..${ctx.durationMs}ms, looping with a short pause.
-   Clicking the stage restarts it. Add a compact bar under the stage with Phase 1–5 buttons and "Loop All".
+3. One requestAnimationFrame loop with renderAt(t), t = performance.now() − start, start captured at page load, so
+   renderAt(t) at t ms matches the video at t ms (same timeline as the table). Run 0..${ctx.durationMs}ms, then loop after a short pause.
+   Clicking the stage restarts it. Put a compact control bar with id="mc-controls" OUTSIDE #mc-stage, below it, with
+   Phase 1–5 buttons and "Loop All".
 4. Every <svg> and open stroke <path> has fill="none" unless intentionally filled. Never emit NaN in path data.
 
 Reply with exactly two fenced blocks:
@@ -415,6 +433,191 @@ ${html}
 \`\`\``;
 }
 
+function visualRefinePrompt(report: VisualReport, html: string, ctx: { title: string; summary: string; layers: TrackedLayer[] }) {
+  const frames = report.frames.map((f) => `t=${Math.round(f.tMs)}ms ${(f.score * 100).toFixed(0)}%`).join(", ");
+  const b = (r: number[] | null) => (r ? `[${r.join(", ")}]` : "none");
+  const size = (src: number[] | null, cl: number[] | null) =>
+    src && cl ? ` (clone is ${Math.round((cl[2] / src[2]) * 100)}% wide, ${Math.round((cl[3] / src[3]) * 100)}% tall of the video)` : "";
+  const diagnostics = report.worstPairs
+    .map(
+      (p, i) => `Image ${i + 1} — t=${Math.round(p.tMs)}ms, match ${(p.score * 100).toFixed(0)}%:
+  background: video ${p.diag.bgSrc} vs clone ${p.diag.bgClone}
+  content box [x,y,w,h]: video ${b(p.diag.contentSrc)} vs clone ${b(p.diag.contentClone)}${size(p.diag.contentSrc, p.diag.contentClone)}
+  inner detail box: video ${b(p.diag.detailSrc)} vs clone ${b(p.diag.detailClone)}${size(p.diag.detailSrc, p.diag.detailClone)}`
+    )
+    .join("\n");
+  const table = ctx.layers
+    .map(
+      (l) =>
+        `- ${l.name} (id ${l.id}, ${l.colorHex}): ${(l.track ?? [])
+          .filter((s) => s.box)
+          .map((s) => `t=${Math.round(s.tMs)} [${[s.box!.x, s.box!.y, s.box!.width, s.box!.height].map(Math.round).join(",")}]`)
+          .join(" ")}`
+    )
+    .join("\n");
+  return `You are Meta Muse Spark 1.3 inside MotionClone. Your clone of "${ctx.title}" was rendered at the source video's
+timestamps and compared frame by frame inside the content region (score = 0.4·SSIM + 0.6·fraction of content pixels whose colour matches).
+Overall visual match: ${(report.score * 100).toFixed(1)}% — target ${(VISUAL_TARGET * 100).toFixed(0)}%.
+Per frame: ${frames}
+Each attached image is one of the ${report.worstPairs.length} worst frames: LEFT = source video, RIGHT = your clone at the same time,
+both cropped to the same region and zoomed (the zoom and crop box are printed in the header) so fine detail is visible.
+Measured differences (640x400 stage px — make the clone's numbers equal the video's):
+${diagnostics}
+
+Summary: ${ctx.summary}
+Measured layer boxes [x,y,w,h] on the 640x400 stage:
+${table}
+
+Frames already at or above target — DO NOT change anything that affects them: ${
+    report.frames.filter((f) => f.score >= VISUAL_TARGET).map((f) => `t=${Math.round(f.tMs)}ms`).join(", ") || "none yet"
+  }.
+Make the SMALLEST targeted edits that fix the differences in the pairs (element positions and sizes, shapes and corner
+radii, colours, gradients, glows/shadows, inner details such as icons and strokes, missing or extra elements, and timing:
+if the clone is ahead of or behind the video at a timestamp, retime that phase only). Do not restructure or rewrite code
+that already matches — previous full rewrites scored lower. The stage background must match the video exactly.
+Keep: the 640x400 #mc-stage, the #mc-controls bar outside it, the window.MC_SPRING contract, and renderAt(t) driven by
+performance.now() from page load.
+Reply with exactly one \`\`\`html fenced block containing the complete corrected document.
+
+\`\`\`html
+${html}
+\`\`\``;
+}
+
+function springsFor(layers: TrackedLayer[]) {
+  const map = Object.fromEntries(
+    layers.map((l) => [l.id, { stiffness: l.physics.stiffness, damping: l.physics.damping, mass: l.physics.mass }])
+  );
+  const first = layers[0]?.physics;
+  return { stiffness: first?.stiffness ?? 300, damping: first?.damping ?? 20, mass: 1, layers: map };
+}
+
+/**
+ * ⑥ Visual verify + ⑦ refine: score the clone against the source frames in headless Chrome, then
+ * show Muse Spark the worst source/clone pairs and keep whichever version scores best.
+ */
+async function visualLoop(
+  input: PipelineInput,
+  emit: (e: PipelineEvent) => void,
+  startHtml: string,
+  layers: TrackedLayer[],
+  times: number[],
+  ctx: { title: string; summary: string },
+  remaining: () => number,
+  priorHistory: number[] = [],
+  maxRounds = VISUAL_MAX_ROUNDS,
+  prevRounds = 0
+): Promise<{ html: string; visualMatch: AnalysisPayload["visualMatch"] }> {
+  if (!findChrome()) {
+    emit({ type: "stage", stage: "visual-verify", status: "warn", message: "No local Chrome found (set CHROME_PATH) — visual verification skipped" });
+    return { html: startHtml, visualMatch: null };
+  }
+  const springs = springsFor(layers);
+  emit({ type: "stage", stage: "visual-verify", status: "start", message: "Rendering the clone at the video's timestamps in headless Chrome…" });
+  let report: VisualReport;
+  try {
+    report = await renderAndScore(startHtml, input.keyframes, times, springs);
+  } catch (err) {
+    emit({ type: "stage", stage: "visual-verify", status: "warn", message: `Visual verification failed: ${(err as Error).message}` });
+    return { html: startHtml, visualMatch: null };
+  }
+  const dumpPairs = (r: VisualReport, tag: string) => {
+    if (process.env.MOTIONCLONE_DEBUG !== "1") return;
+    try {
+      fs.mkdirSync("/tmp/motionclone_pairs", { recursive: true });
+      r.worstPairs.forEach((p, i) =>
+        fs.writeFileSync(`/tmp/motionclone_pairs/${tag}_${i}_t${Math.round(p.tMs)}.jpg`, Buffer.from(p.image.split(",")[1], "base64"))
+      );
+    } catch {
+      // debug only
+    }
+  };
+  dumpPairs(report, "r0");
+  const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
+  const worst = report.frames.reduce((a, f) => (f.score < a.score ? f : a), report.frames[0]);
+  emit({
+    type: "stage",
+    stage: "visual-verify",
+    status: report.score >= VISUAL_TARGET ? "done" : "warn",
+    message: `Visual match ${pct(report.score)} over ${report.frames.length} frames (target ${pct(VISUAL_TARGET)}) · worst t=${Math.round(worst.tMs)}ms ${pct(worst.score)}`,
+  });
+
+  let best = { html: startHtml, report };
+  // Best-so-far trail: a continuation starts from the previous trail (its re-measure is not a new step).
+  const history = priorHistory.length ? [...priorHistory] : [report.score];
+  let roundsRun = 0;
+  let rounds = 0;
+  while (best.report.score < VISUAL_TARGET && rounds < maxRounds && remaining() > 100_000) {
+    rounds++;
+    roundsRun++;
+    emit({
+      type: "stage",
+      stage: "visual-refine",
+      status: "start",
+      message: `Round ${rounds}: Muse Spark drafting ${REFINE_TEMPERATURES.length} fixes from the ${best.report.worstPairs.length} worst source/clone frame pairs…`,
+    });
+    try {
+      // Best-of-N: a conservative and an exploratory variant in parallel; keep the higher score.
+      const prompt = visualRefinePrompt(best.report, best.html, { ...ctx, layers });
+      const images = best.report.worstPairs.map((p) => p.image);
+      const timeout = Math.min(150_000, remaining() - 30_000);
+      const variants = await Promise.all(
+        REFINE_TEMPERATURES.map(async (temp) => {
+          try {
+            const candidate = extractHtmlDocument(await museChat(input.apiKey, prompt, images, timeout, temp));
+            const fatal = candidate ? lintGeneratedHtml(candidate).filter((i) => /syntax error|truncated/.test(i)) : ["no HTML in reply"];
+            if (!candidate || fatal.length) return { rejected: fatal[0] };
+            const cleaned = sanitizeGeneratedHtml(candidate);
+            return { cleaned, report: await renderAndScore(cleaned, input.keyframes, times, springs) };
+          } catch (err) {
+            return { rejected: (err as Error).message };
+          }
+        })
+      );
+      const scored = variants.filter((v): v is { cleaned: string; report: VisualReport } => "report" in v && !!v.report);
+      if (!scored.length) {
+        const why = variants.map((v) => ("rejected" in v ? v.rejected : "")).filter(Boolean)[0];
+        emit({ type: "stage", stage: "visual-refine", status: "warn", message: `Round ${rounds}: no usable variant (${why}) — kept ${pct(best.report.score)}` });
+        continue;
+      }
+      const top = scored.reduce((a, v) => (v.report.score > a.report.score ? v : a));
+      const cleaned = top.cleaned;
+      const candReport = top.report;
+      dumpPairs(candReport, `r${rounds}`);
+      const tried = scored.map((v) => pct(v.report.score)).join(" / ");
+      const improved = candReport.score > best.report.score;
+      emit({
+        type: "stage",
+        stage: "visual-refine",
+        status: improved ? "done" : "warn",
+        message: improved
+          ? `Round ${rounds}: ${pct(best.report.score)} → ${pct(candReport.score)} (variants ${tried})`
+          : `Round ${rounds}: variants ${tried} did not beat ${pct(best.report.score)} — kept the better clone`,
+      });
+      if (improved) {
+        best = { html: cleaned, report: candReport };
+        history.push(candReport.score);
+      }
+    } catch (err) {
+      emit({ type: "stage", stage: "visual-refine", status: "warn", message: `Round ${rounds}: ${(err as Error).message}` });
+      break;
+    }
+  }
+  if (!rounds && best.report.score >= VISUAL_TARGET) {
+    emit({ type: "stage", stage: "visual-refine", status: "done", message: `Already at ${pct(best.report.score)} — no refinement needed` });
+  }
+  return {
+    html: best.html,
+    visualMatch: {
+      score: best.report.score,
+      target: VISUAL_TARGET,
+      rounds: (prevRounds ?? 0) + roundsRun,
+      history,
+      frames: best.report.frames.map((f) => ({ tMs: f.tMs, score: f.score })),
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------------------------
 // Pipeline
 // ---------------------------------------------------------------------------------------------
@@ -427,6 +630,24 @@ export async function runMotionClonePipeline(
   const remaining = () => budgetMs - (Date.now() - startedAt);
   const n = input.keyframes.length;
   const times = input.keyframeTimesMs.length === n ? input.keyframeTimesMs : input.keyframes.map((_, i) => (i / Math.max(1, n - 1)) * input.durationMs);
+
+  // "Refine again": continue from the previous best clone instead of starting over.
+  const prev = input.continueFrom;
+  if (prev?.livePreviewHtml && prev.layers?.length) {
+    const { html, visualMatch } = await visualLoop(
+      input,
+      emit,
+      prev.livePreviewHtml,
+      prev.layers,
+      times,
+      { title: prev.interactionTitle, summary: prev.interactionSummary },
+      remaining,
+      prev.visualMatch?.history ?? [],
+      VISUAL_MAX_ROUNDS + 1,
+      prev.visualMatch?.rounds ?? 0
+    );
+    return { ...prev, livePreviewHtml: html, visualMatch };
+  }
 
   // ---- 1. Muse Spark 1.3: multi-frame perception -------------------------------------------
   emit({ type: "stage", stage: "muse-detect", status: "start", message: `Muse Spark 1.3 reasoning over ${n} keyframes…` });
@@ -613,7 +834,15 @@ export async function runMotionClonePipeline(
     }
   }
 
-  const finalHtml = html ? sanitizeGeneratedHtml(html) : layers.length ? buildDeterministicPreviewHtml(layers, bg, input.durationMs) : undefined;
+  let finalHtml = html ? sanitizeGeneratedHtml(html) : layers.length ? buildDeterministicPreviewHtml(layers, bg, input.durationMs) : undefined;
+
+  // ---- 6–7. Visual verify + refine -------------------------------------------------------------
+  let visualMatch: AnalysisPayload["visualMatch"] = null;
+  if (finalHtml) {
+    const out = await visualLoop(input, emit, finalHtml, layers, times, { title, summary }, remaining);
+    finalHtml = out.html;
+    visualMatch = out.visualMatch;
+  }
 
   const result: AnalysisPayload = {
     presetId: "custom-upload",
@@ -624,6 +853,7 @@ export async function runMotionClonePipeline(
     usedLiveMetaApi: true,
     crossModelAgreement: agreePairs ? { meanIoU: Number((agreeSum / agreePairs).toFixed(3)), pairs: agreePairs } : null,
     selfHeal,
+    visualMatch,
     pipelineMetadata: {
       perceptionModel: samHits ? `${SAM_MODEL_ID} (${samHits} keyframe masks) + ${MUSE_MODEL_ID}` : `${MUSE_MODEL_ID} (SAM 3.1 unavailable)`,
       reasoningModel: MUSE_MODEL_ID,

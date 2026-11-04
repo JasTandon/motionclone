@@ -1,0 +1,15 @@
+node_modules/
+.next/
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+.DS_Store
+backend/uploads/
+backend/renders/
+frontend/tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Demo video kit (kept local)
+demo/
